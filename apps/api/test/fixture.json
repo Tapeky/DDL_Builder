@@ -1,0 +1,40 @@
+{
+  "heroes": [
+    { "id": 1, "name": "Infernus", "player_selectable": true },
+    { "id": 2, "name": "Seven", "player_selectable": true },
+    { "id": 6, "name": "Abrams", "player_selectable": true },
+    { "id": 13, "name": "Haze", "player_selectable": true },
+    { "id": 20, "name": "Ivy", "player_selectable": true },
+    { "id": 99, "name": "Unsupported test hero", "player_selectable": true }
+  ],
+  "classes": [
+    "upgrade_rapid_rounds",
+    "upgrade_improved_spirit",
+    "upgrade_health",
+    "upgrade_tech_defense_shredders",
+    "upgrade_health_stealing_magic",
+    "upgrade_magic_vulnerability",
+    "upgrade_escalating_exposure",
+    "upgrade_boundless_spirit",
+    "upgrade_chonky",
+    "upgrade_improved_bullet_armor",
+    "upgrade_non_player_bonus",
+    "upgrade_soaring_spirit",
+    "upgrade_lifestrike_gauntlets",
+    "upgrade_close_range",
+    "upgrade_melee_charge",
+    "upgrade_boxing_glove",
+    "upgrade_close_quarter_combat",
+    "upgrade_tech_purge",
+    "upgrade_critshot",
+    "upgrade_clip_size",
+    "upgrade_vampire",
+    "upgrade_burst_fire",
+    "upgrade_quick_silver",
+    "upgrade_ricochet",
+    "upgrade_health_stimpak",
+    "upgrade_health_nova",
+    "upgrade_arcane_extension",
+    "upgrade_imbued_duration_extender"
+  ]
+}

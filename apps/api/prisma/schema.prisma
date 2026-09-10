@@ -1,0 +1,42 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model CatalogSnapshot {
+  id            String   @id
+  clientVersion Int
+  heroes        Json
+  items         Json
+  importedAt    DateTime @default(now())
+  head          CatalogHead?
+  builds        SavedBuild[]
+}
+
+model CatalogHead {
+  id         String          @id
+  snapshotId String          @unique
+  snapshot   CatalogSnapshot @relation(fields: [snapshotId], references: [id])
+  checkedAt  DateTime
+}
+
+model SavedBuild {
+  id         String          @id
+  snapshotId String
+  snapshot   CatalogSnapshot @relation(fields: [snapshotId], references: [id])
+  payload    Json
+  createdAt  DateTime        @default(now())
+}
+
+model SyncRun {
+  id            String    @id @default(cuid())
+  startedAt     DateTime  @default(now())
+  finishedAt    DateTime?
+  status        String
+  clientVersion Int?
+  errorCode     String?
+}
