@@ -17,6 +17,7 @@ model CatalogSnapshot {
   builds        SavedBuild[]
   editorialVersions EditorialBuildVersion[]
   tacticalProfiles TacticalHeroProfile[]
+  analyticsRuns AnalyticsRun[]
   patchesFrom   PatchChange[] @relation("PatchFrom")
   patchesTo     PatchChange[] @relation("PatchTo")
 }
@@ -131,6 +132,63 @@ model SyncRun {
   status        String
   clientVersion Int?
   errorCode     String?
+}
+
+model ReferencePlayer {
+  id                  String   @id
+  displayName         String
+  region              String
+  accountIds          Json
+  heroIds             Json
+  verificationStatus  String
+  verificationSource  String
+  verifiedAt          DateTime?
+  lastSeenAt          DateTime?
+  sourceUrl           String?
+  notes               String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([verificationStatus, region])
+}
+
+model AnalyticsRun {
+  id             String          @id
+  snapshotId     String
+  metric         String
+  status         String
+  source         String
+  filterHash     String
+  filters        Json
+  rowCount       Int?
+  errorCode      String?
+  startedAt      DateTime        @default(now())
+  completedAt    DateTime?
+  snapshot       CatalogSnapshot @relation(fields: [snapshotId], references: [id])
+  itemStats      AnalyticsItemStat[]
+
+  @@index([snapshotId, metric, filterHash])
+  @@index([snapshotId, status])
+  @@index([completedAt])
+}
+
+model AnalyticsItemStat {
+  id                    String       @id
+  runId                 String
+  itemId                BigInt
+  bucket                Int
+  wins                  BigInt
+  losses               BigInt
+  matches               BigInt
+  players               BigInt
+  avgBuyTimeS           Float
+  avgSellTimeS          Float
+  avgBuyTimeRelative    Float
+  avgSellTimeRelative   Float
+  run                   AnalyticsRun @relation(fields: [runId], references: [id])
+
+  @@unique([runId, itemId, bucket])
+  @@index([itemId, matches])
 }
 
 model TacticalTagDefinition {
