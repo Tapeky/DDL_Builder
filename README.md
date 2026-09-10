@@ -16,6 +16,7 @@ Un premier site en français pour explorer le catalogue de Deadlock et préparer
 - Signalement explicite des données absentes ou non vérifiées depuis 24 heures ; un import échoué ne détruit pas le dernier catalogue valide.
 - Builds éditoriaux versionnés dans PostgreSQL, back-office protégé et revalidation automatique après changement de catalogue.
 - Collecte manuelle des statistiques d’achats avec fenêtre, modes, rang, fortune et adversaires conservés comme filtres auditables.
+- Collecte des performances par héros pour les seuls profils de référence vérifiés, puis affichage de ces repères dans les recommandations.
 
 Les objets spéciaux de niveau 5 sont exclus. Les versions importées sont des **versions du client**, pas des dates de patch vérifiées. La fraîcheur du catalogue ne vaut pas validation des builds pour la méta actuelle.
 
@@ -84,6 +85,8 @@ Les profils de référence sont gérés séparément par `ReferencePlayer`. Un n
 
 La sélection initiale conserve les réponses de `/v1/leaderboard/{region}/{hero_id}` dans `LeaderboardRun` et `LeaderboardCandidate`. La source ne fournit pas de champ d’activité ; `startedAt` indique donc l’instant d’observation, tandis que le classement, les héros principaux et les `possible_account_ids` restent des indices non vérifiés. Les IDs répétés dans une même ligne sont dédupliqués, mais deux lignes partageant un pseudo ne sont jamais fusionnées. Depuis le back-office, un candidat peut être promu manuellement vers `ReferencePlayer` en statut `pending`, ou rejeté ; aucune collecte ne crée automatiquement une identité vérifiée.
 
+Une seconde collecte manuelle interroge `/v1/players/hero-stats` uniquement avec les `accountIds` de profils `verified` associés au héros. Chaque `ReferenceStatRun` est lié au snapshot du catalogue et conserve les lignes par compte dans `ReferenceHeroStat`. La recommandation lit le dernier run réussi de sa version et affiche, par joueur encore vérifié, le volume de parties, la dernière activité et des rythmes moyens pondérés par le temps de jeu. Ces mesures fournissent un contexte observable ; elles ne réordonnent pas les achats et ne valident pas le build éditorial.
+
 ## Structure
 
 ```text
@@ -135,6 +138,8 @@ Le seed de départ est dans `apps/api/src/editorial/seed-data.ts`, tandis que `a
 | `POST /v1/admin/leaderboards/collect`                | Collecte un leaderboard de héros et conserve les candidats bruts normalisés          |
 | `POST /v1/admin/leaderboards/candidates/:id/promote` | Promeut manuellement un candidat vers un profil `pending`                            |
 | `POST /v1/admin/leaderboards/candidates/:id/reject`  | Rejette manuellement un candidat                                                     |
+| `GET /v1/admin/reference-stats/runs`                 | Liste les collectes de performances des références vérifiées                         |
+| `POST /v1/admin/reference-stats/collect`             | Collecte les statistiques du héros pour les seuls comptes vérifiés                   |
 
 Les champs inconnus sont rejetés. Les IDs d’objets sont des nombres JavaScript entiers, sans conversion en entier SQL signé 32 bits. Un héros sans règles reçoit une réponse 422 plutôt qu’un build générique présenté comme personnalisé.
 
@@ -160,9 +165,9 @@ GitHub Actions utilise une base éphémère avec des fixtures explicitement synt
 
 1. Faire relire les quinze variantes par des joueurs expérimentés avant de les présenter comme des recommandations validées.
 2. Faire relire les versions marquées `stale` après chaque nouveau client et documenter les décisions éditoriales.
-3. Ajouter les fenêtres, échantillons et intervalles de confiance aux agrégats après validation de leur couverture réelle ; la collecte actuelle ne publie pas encore de winrate.
-4. Vérifier la disponibilité de la position de farm 1–6 et de la lane avant de les utiliser pour sélectionner une référence.
-5. Brancher les profils statistiques validés, puis les substitutions adverses, dans le moteur déterministe sans mélanger des archétypes incompatibles.
+3. Ajouter les intervalles de confiance et des seuils éditoriaux avant d’utiliser les performances des références pour modifier un ordre d’achat ; elles restent actuellement informatives.
+4. Vérifier la disponibilité de la position de farm 1–6 et de la lane avant de comparer des profils ou de sélectionner une référence principale.
+5. Relier les achats observés des comptes vérifiés aux versions éditoriales avant de présenter un build comme validé par une référence.
 6. Ajouter favoris, comptes et éditeur personnel seulement après validation de ce premier parcours.
 
 Avant une mise en production publique : vérifier les conditions de réutilisation des données et visuels, configurer HTTPS, sauvegardes/restauration, alertes d’import, limites de ressources et authentification de l’administration future. Le limiteur actuel est en mémoire, par processus et adresse IP (120 requêtes/minute par route). Derrière le proxy Next.js, les visiteurs partagent l’adresse du proxy : prévoir une stratégie d’identification de client fiable et un limiteur distribué avant de monter en charge. Ne pas faire confiance aux en-têtes transférés provenant de clients non fiables.

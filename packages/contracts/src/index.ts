@@ -130,6 +130,7 @@ export interface Recommendation {
   adaptations: RecommendationAdaptation[];
   steps: BuildStep[];
   warnings: string[];
+  referenceEvidence: RecommendationReferenceEvidence[];
   evidence: 'editorial-draft';
   sharePath: string;
 }
@@ -162,6 +163,37 @@ export interface ReferencePlayer {
   lastSeenAt: string | null;
   sourceUrl: string | null;
   notes: string;
+}
+
+export interface RecommendationReferenceEvidence {
+  playerId: string;
+  displayName: string;
+  region: string;
+  verificationSource: string;
+  verifiedAt: string;
+  sourceUrl: string | null;
+  collectedAt: string;
+  matchesPlayed: number;
+  lastPlayed: string;
+  killsPerMin: number;
+  deathsPerMin: number;
+  assistsPerMin: number;
+  networthPerMin: number;
+  damagePerMin: number;
+}
+
+export interface ReferenceStatRunSummary {
+  id: string;
+  snapshotId: string;
+  heroId: number;
+  status: AnalyticsRunStatus;
+  source: string;
+  minUnixTimestamp: number;
+  playerCount: number | null;
+  rowCount: number | null;
+  errorCode: string | null;
+  startedAt: string;
+  completedAt: string | null;
 }
 
 export interface AnalyticsFilters {

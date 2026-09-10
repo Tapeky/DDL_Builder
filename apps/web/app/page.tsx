@@ -588,7 +588,8 @@ export default function Home() {
                     <CircleAlert size={18} />
                     <span>
                       <strong>Brouillon éditorial.</strong> Ce build n’est ni validé, ni une
-                      recommandation méta. Il ne repose pas sur des statistiques de performance.
+                      recommandation méta. Sa séquence d’achats ne découle pas des statistiques de
+                      performance affichées ci-dessous.
                     </span>
                   </div>
                   {result.warnings.length > 0 && (
@@ -640,6 +641,65 @@ export default function Home() {
                       </ul>
                     )}
                   </div>
+                  {(result.referenceEvidence ?? []).length > 0 && (
+                    <section className="reference-evidence" aria-labelledby="reference-title">
+                      <div className="reference-heading">
+                        <BookOpen size={18} />
+                        <div>
+                          <span className="tiny-label">REPÈRES DE JOUEURS VÉRIFIÉS</span>
+                          <h4 id="reference-title">Performance observée sur ce héros</h4>
+                        </div>
+                      </div>
+                      <p className="reference-disclaimer">
+                        Ces profils ont une identité vérifiée et des parties mesurées. Ils donnent
+                        du contexte, mais ne valident pas l’ordre d’achat de ce build.
+                      </p>
+                      <div className="reference-grid">
+                        {(result.referenceEvidence ?? []).map((reference) => (
+                          <article key={reference.playerId} className="reference-card">
+                            <div>
+                              <h5>{reference.displayName}</h5>
+                              <span>{reference.region}</span>
+                            </div>
+                            <strong>{money(reference.matchesPlayed)} parties</strong>
+                            <dl>
+                              <div>
+                                <dt>K / D / A par min.</dt>
+                                <dd>
+                                  {reference.killsPerMin.toFixed(2)} /{' '}
+                                  {reference.deathsPerMin.toFixed(2)} /{' '}
+                                  {reference.assistsPerMin.toFixed(2)}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt>Âmes par min.</dt>
+                                <dd>{money(Math.round(reference.networthPerMin))}</dd>
+                              </div>
+                              <div>
+                                <dt>Dégâts par min.</dt>
+                                <dd>{money(Math.round(reference.damagePerMin))}</dd>
+                              </div>
+                              <div>
+                                <dt>Dernière partie</dt>
+                                <dd>{dateTime(reference.lastPlayed)}</dd>
+                              </div>
+                            </dl>
+                            <small>
+                              Mesuré le {dateTime(reference.collectedAt)} · Vérifié le{' '}
+                              {dateTime(reference.verifiedAt)} · Identité :{' '}
+                              {reference.sourceUrl ? (
+                                <a href={reference.sourceUrl} target="_blank" rel="noreferrer">
+                                  source vérifiée
+                                </a>
+                              ) : (
+                                reference.verificationSource
+                              )}
+                            </small>
+                          </article>
+                        ))}
+                      </div>
+                    </section>
+                  )}
                   <div className="phases">
                     {phases.map((phase) => (
                       <div className="phase" key={phase.id}>
