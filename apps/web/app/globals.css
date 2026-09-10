@@ -566,6 +566,48 @@ section[id] {
   margin-top: 10px;
   color: var(--muted);
 }
+.context-control {
+  border-top: 1px solid var(--line);
+  margin-top: 16px;
+  padding-top: 15px;
+}
+.farm-picker,
+.opponent-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 10px;
+}
+.farm-picker button,
+.opponent-picker button {
+  border: 1px solid var(--line);
+  background: #11160f;
+  color: var(--muted);
+  padding: 7px 9px;
+  font-size: 9px;
+}
+.farm-picker button {
+  min-width: 31px;
+}
+.farm-picker button.active,
+.opponent-picker button.active {
+  border-color: var(--lime);
+  background: #34412b;
+  color: var(--lime);
+}
+.opponent-picker button {
+  text-align: left;
+}
+.context-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+.context-label-row small {
+  color: var(--muted);
+  font-size: 9px;
+}
 .generate-button {
   display: flex;
   align-items: center;
@@ -873,6 +915,40 @@ footer a svg {
   line-height: 1.8;
   color: #bfb393;
   padding-left: 20px;
+}
+.context-summary {
+  border: 1px solid var(--line);
+  background: #11160f;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  margin-top: 18px;
+}
+.context-summary p {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+  margin-top: 7px;
+}
+.context-summary strong {
+  color: var(--cream);
+}
+.threat-list,
+.adaptation-list {
+  color: #bfc9b5;
+  font-size: 10px;
+  line-height: 1.7;
+  padding-left: 17px;
+}
+.adaptation-list {
+  color: var(--lime);
+}
+.investment-list {
+  border-top: 1px solid var(--line);
+  color: #bfc9b5;
+  font-size: 10px;
+  line-height: 1.7;
+  padding: 12px 0 0 17px;
 }
 .phases {
   display: grid;
@@ -1740,6 +1816,83 @@ footer a svg {
   justify-self: start;
   margin-top: 3px;
 }
+.admin-tactical {
+  border-top: 1px solid var(--line);
+  margin-top: 28px;
+  padding-top: 22px;
+}
+.admin-tactical .admin-steps-heading {
+  border-top: 0;
+  padding-top: 0;
+  margin-top: 0;
+}
+.admin-tactical .admin-steps-heading > select {
+  width: 190px;
+}
+.admin-tactical-list {
+  display: grid;
+  gap: 8px;
+}
+.admin-tactical-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.7fr) 110px minmax(180px, 1fr);
+  align-items: center;
+  gap: 9px;
+  border: 1px solid #343b3080;
+  padding: 10px;
+  margin: 0;
+}
+.admin-tactical-row > label {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.admin-tactical-row > label input {
+  width: auto;
+  margin-top: 3px;
+  padding: 0;
+}
+.admin-tactical-row strong,
+.admin-tactical-row small {
+  display: block;
+}
+.admin-tactical-row strong {
+  color: var(--cream);
+  font-size: 12px;
+}
+.admin-tactical-row small {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
+  margin-top: 3px;
+}
+.admin-tactical-row select,
+.admin-tactical-row input {
+  min-width: 0;
+  padding: 10px 11px;
+  font-size: 11px;
+}
+.admin-investment-list {
+  display: grid;
+  gap: 8px;
+}
+.admin-investment {
+  display: grid;
+  grid-template-columns: 110px 100px 100px 110px minmax(180px, 1fr) 34px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #343b3080;
+  padding: 9px;
+  margin: 0;
+}
+.admin-investment select,
+.admin-investment input {
+  min-width: 0;
+  padding: 10px 11px;
+  font-size: 11px;
+}
 .admin-duplicate {
   display: grid;
   grid-template-columns: 1fr 180px 140px auto;
@@ -1782,6 +1935,18 @@ footer a svg {
   }
   .admin-step {
     grid-template-columns: 34px 100px 1fr 34px;
+  }
+  .admin-tactical-row {
+    grid-template-columns: minmax(160px, 1fr) 100px;
+  }
+  .admin-tactical-row input:last-child {
+    grid-column: 1/-1;
+  }
+  .admin-investment {
+    grid-template-columns: 1fr 1fr 100px 100px 34px;
+  }
+  .admin-investment input:last-of-type {
+    grid-column: 1/5;
   }
   .admin-step input:nth-of-type(2) {
     grid-column: 3;
@@ -1829,6 +1994,17 @@ footer a svg {
   .admin-step .admin-icon-button {
     grid-column: 3;
     grid-row: 1 / span 3;
+  }
+  .admin-investment {
+    grid-template-columns: 1fr 34px;
+  }
+  .admin-investment select,
+  .admin-investment input {
+    grid-column: 1;
+  }
+  .admin-investment .admin-icon-button {
+    grid-column: 2;
+    grid-row: 1 / span 5;
   }
   .admin-duplicate {
     grid-template-columns: 1fr;

@@ -1,7 +1,18 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import type { Catalog, EditorialBuildStatus, Phase, Style } from '@deadlock/contracts';
+import type {
+  Catalog,
+  Category,
+  EditorialBuildStatus,
+  HeroTacticalProfile,
+  InvestmentTarget,
+  Phase,
+  Style,
+  TacticalProfileStatus,
+  TacticalTagDefinition,
+  TacticalTagKey,
+} from '@deadlock/contracts';
 import {
   ArrowLeft,
   Check,
@@ -22,6 +33,7 @@ type FormStep = {
   reason: string;
   alternatives: Alternative[];
 };
+type FormInvestment = InvestmentTarget;
 type BuildVersion = {
   id: string;
   revision: number;
@@ -30,12 +42,24 @@ type BuildVersion = {
   status: EditorialBuildStatus;
   snapshotId: string;
   steps: FormStep[];
+  investments: FormInvestment[];
 };
 type BuildSummary = { id: string; heroId: number; style: Style; version: BuildVersion | null };
 type Detail = {
   snapshot: { id: string; clientVersion: number };
   build: BuildSummary;
   version: BuildVersion | null;
+};
+type TacticalResponse = {
+  version: string;
+  tags: TacticalTagDefinition[];
+  profiles: HeroTacticalProfile[];
+};
+type TacticalDraft = {
+  enabled: boolean;
+  intensity: 1 | 2 | 3;
+  evidence: string;
+  status: TacticalProfileStatus;
 };
 
 const styles: Style[] = ['balanced', 'damage', 'survival'];
@@ -67,6 +91,16 @@ function emptyStep(order: number): FormStep {
   };
 }
 
+function emptyInvestment(): FormInvestment {
+  return {
+    branch: 'weapon',
+    phase: 'core',
+    threshold: 4_800,
+    priority: 'preferred',
+    reason: '',
+  };
+}
+
 function toForm(version: BuildVersion | null) {
   return {
     title: version?.title ?? '',
@@ -74,7 +108,29 @@ function toForm(version: BuildVersion | null) {
     steps:
       version?.steps.map((step) => ({ ...step, alternatives: step.alternatives ?? [] })) ??
       [1, 2, 3].map(emptyStep),
+    investments: version?.investments ?? [],
   };
+}
+
+function toTacticalDraft(
+  profile: HeroTacticalProfile | undefined,
+  definitions: TacticalTagDefinition[],
+) {
+  const tags = new Map(profile?.tags.map((tag) => [tag.key, tag]));
+  return Object.fromEntries(
+    definitions.map((definition) => {
+      const tag = tags.get(definition.key);
+      return [
+        definition.key,
+        {
+          enabled: Boolean(tag),
+          intensity: tag?.intensity ?? 2,
+          evidence: tag?.evidence ?? '',
+          status: tag?.status ?? 'draft',
+        },
+      ];
+    }),
+  ) as Record<TacticalTagKey, TacticalDraft>;
 }
 
 export default function AdminPage() {
@@ -89,6 +145,13 @@ export default function AdminPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [tactical, setTactical] = useState<TacticalResponse | null>(null);
+  const [tacticalHeroId, setTacticalHeroId] = useState<number | null>(null);
+  const [tacticalStatus, setTacticalStatus] = useState<TacticalProfileStatus>('draft');
+  const [tacticalDraft, setTacticalDraft] = useState<Record<TacticalTagKey, TacticalDraft>>(
+    {} as Record<TacticalTagKey, TacticalDraft>,
+  );
+  const [tacticalSaving, setTacticalSaving] = useState(false);
 
   useEffect(() => {
     fetch('/api/v1/catalog')
@@ -107,6 +170,14 @@ export default function AdminPage() {
     try {
       const response = await request<{ builds: BuildSummary[] }>('/builds', token);
       setBuilds(response.builds);
+      const tacticalResponse = await request<TacticalResponse>('/tactical-profiles', token);
+      setTactical(tacticalResponse);
+      const tacticalHero = tacticalResponse.profiles[0];
+      if (tacticalHero) {
+        setTacticalHeroId(tacticalHero.heroId);
+        setTacticalStatus(tacticalHero.status);
+        setTacticalDraft(toTacticalDraft(tacticalHero, tacticalResponse.tags));
+      }
       const first = response.builds[0];
       if (first) await selectBuild(first.id);
       setMessage('Back-office connecté.');
@@ -214,6 +285,52 @@ export default function AdminPage() {
     if (notice) setMessage(notice);
   }
 
+  async function saveTactical(event: FormEvent) {
+    event.preventDefault();
+    if (!tactical || tacticalHeroId === null) return;
+    setTacticalSaving(true);
+    setError('');
+    setMessage('');
+    try {
+      const tags = tactical.tags
+        .filter((definition) => tacticalDraft[definition.key]?.enabled)
+        .map((definition) => {
+          const draft = tacticalDraft[definition.key];
+          return {
+            key: definition.key,
+            intensity: draft.intensity,
+            evidence: draft.evidence,
+            status: draft.status,
+          };
+        });
+      const profile = await request<HeroTacticalProfile>(
+        `/tactical-profiles/${tacticalHeroId}?version=${encodeURIComponent(tactical.version)}`,
+        token,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ status: tacticalStatus, source: 'back-office', tags }),
+        },
+      );
+      setTactical((current) =>
+        current
+          ? {
+              ...current,
+              profiles: current.profiles.map((item) =>
+                item.heroId === profile.heroId ? profile : item,
+              ),
+            }
+          : current,
+      );
+      setTacticalDraft(toTacticalDraft(profile, tactical.tags));
+      setTacticalStatus(profile.status);
+      setMessage('Profil tactique enregistré comme brouillon.');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Profil tactique invalide.');
+    } finally {
+      setTacticalSaving(false);
+    }
+  }
+
   async function refresh(id: string, notice: string) {
     await loadBuilds(id, notice);
   }
@@ -233,6 +350,15 @@ export default function AdminPage() {
       steps: current.steps
         .filter((_, stepIndex) => stepIndex !== index)
         .map((step, stepIndex) => ({ ...step, order: stepIndex + 1 })),
+    }));
+  }
+
+  function updateInvestment(index: number, value: Partial<FormInvestment>) {
+    setForm((current) => ({
+      ...current,
+      investments: current.investments.map((investment, investmentIndex) =>
+        investmentIndex === index ? { ...investment, ...value } : investment,
+      ),
     }));
   }
 
@@ -446,11 +572,213 @@ export default function AdminPage() {
                   </fieldset>
                 ))}
               </div>
+              <div className="admin-steps-heading">
+                <div>
+                  <span className="admin-kicker">
+                    PALIERS D’INVESTISSEMENT · {form.investments.length}
+                  </span>
+                  <p>
+                    Ajoutez seulement les seuils justifiés pour ce héros et cette référence ; aucun
+                    quota de 4 800 n’est appliqué automatiquement.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="admin-secondary"
+                  onClick={() =>
+                    setForm({ ...form, investments: [...form.investments, emptyInvestment()] })
+                  }
+                >
+                  <Plus size={15} /> Ajouter
+                </button>
+              </div>
+              <div className="admin-investment-list">
+                {form.investments.map((investment, index) => (
+                  <fieldset
+                    key={`${investment.branch}-${investment.phase}-${index}`}
+                    className="admin-investment"
+                  >
+                    <select
+                      value={investment.branch}
+                      onChange={(event) =>
+                        updateInvestment(index, { branch: event.target.value as Category })
+                      }
+                      aria-label={`Branche du palier ${index + 1}`}
+                    >
+                      <option value="weapon">Arme</option>
+                      <option value="vitality">Vitalité</option>
+                      <option value="spirit">Esprit</option>
+                    </select>
+                    <select
+                      value={investment.phase}
+                      onChange={(event) =>
+                        updateInvestment(index, { phase: event.target.value as Phase })
+                      }
+                      aria-label={`Phase du palier ${index + 1}`}
+                    >
+                      {phases.map((phase) => (
+                        <option key={phase} value={phase}>
+                          {phase}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      min={1}
+                      max={100_000}
+                      value={investment.threshold}
+                      onChange={(event) =>
+                        updateInvestment(index, { threshold: Number(event.target.value) })
+                      }
+                      aria-label={`Seuil du palier ${index + 1}`}
+                    />
+                    <select
+                      value={investment.priority}
+                      onChange={(event) =>
+                        updateInvestment(index, {
+                          priority: event.target.value as FormInvestment['priority'],
+                        })
+                      }
+                      aria-label={`Priorité du palier ${index + 1}`}
+                    >
+                      <option value="required">Requis</option>
+                      <option value="preferred">Préféré</option>
+                    </select>
+                    <input
+                      value={investment.reason}
+                      onChange={(event) => updateInvestment(index, { reason: event.target.value })}
+                      placeholder="Pourquoi ce palier ?"
+                      aria-label={`Explication du palier ${index + 1}`}
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="admin-icon-button"
+                      onClick={() =>
+                        setForm({
+                          ...form,
+                          investments: form.investments.filter(
+                            (_, investmentIndex) => investmentIndex !== index,
+                          ),
+                        })
+                      }
+                      aria-label={`Supprimer le palier ${index + 1}`}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </fieldset>
+                ))}
+              </div>
               <button className="admin-primary save-button" disabled={saving}>
                 {saving ? <LoaderCircle className="spin" /> : <Save size={16} />} Enregistrer une
                 nouvelle révision
               </button>
             </form>
+            {tactical && (
+              <form className="admin-tactical" onSubmit={saveTactical}>
+                <div className="admin-steps-heading">
+                  <div>
+                    <span className="admin-kicker">PROFIL TACTIQUE</span>
+                    <p>
+                      Un tag doit rester justifié par une capacité ou un effet versionné. Un profil
+                      en brouillon ne déclenche aucune substitution publique.
+                    </p>
+                  </div>
+                  <select
+                    value={tacticalHeroId ?? ''}
+                    onChange={(event) => {
+                      const heroId = Number(event.target.value);
+                      setTacticalHeroId(heroId);
+                      const profile = tactical.profiles.find((item) => item.heroId === heroId);
+                      setTacticalStatus(profile?.status ?? 'draft');
+                      setTacticalDraft(toTacticalDraft(profile, tactical.tags));
+                    }}
+                    aria-label="Héros du profil tactique"
+                  >
+                    {tactical.profiles.map((profile) => (
+                      <option key={profile.heroId} value={profile.heroId}>
+                        {catalog?.heroes.find((hero) => hero.id === profile.heroId)?.name ??
+                          `Héros ${profile.heroId}`}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={tacticalStatus}
+                    onChange={(event) =>
+                      setTacticalStatus(event.target.value as TacticalProfileStatus)
+                    }
+                    aria-label="Statut du profil tactique"
+                  >
+                    <option value="draft">Brouillon</option>
+                    <option value="validated">Validé</option>
+                    <option value="stale">À revoir</option>
+                  </select>
+                </div>
+                <div className="admin-tactical-list">
+                  {tactical.tags.map((definition) => {
+                    const draft = tacticalDraft[definition.key];
+                    if (!draft) return null;
+                    return (
+                      <fieldset key={definition.key} className="admin-tactical-row">
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={draft.enabled}
+                            onChange={(event) =>
+                              setTacticalDraft({
+                                ...tacticalDraft,
+                                [definition.key]: { ...draft, enabled: event.target.checked },
+                              })
+                            }
+                          />
+                          <span>
+                            <strong>{definition.label}</strong>
+                            <small>{definition.description}</small>
+                          </span>
+                        </label>
+                        {draft.enabled && (
+                          <>
+                            <select
+                              value={draft.intensity}
+                              onChange={(event) =>
+                                setTacticalDraft({
+                                  ...tacticalDraft,
+                                  [definition.key]: {
+                                    ...draft,
+                                    intensity: Number(event.target.value) as 1 | 2 | 3,
+                                  },
+                                })
+                              }
+                              aria-label={`Intensité ${definition.label}`}
+                            >
+                              <option value={1}>Faible</option>
+                              <option value={2}>Moyenne</option>
+                              <option value={3}>Forte</option>
+                            </select>
+                            <input
+                              value={draft.evidence}
+                              onChange={(event) =>
+                                setTacticalDraft({
+                                  ...tacticalDraft,
+                                  [definition.key]: { ...draft, evidence: event.target.value },
+                                })
+                              }
+                              placeholder="Justification et version"
+                              aria-label={`Justification ${definition.label}`}
+                              required
+                            />
+                          </>
+                        )}
+                      </fieldset>
+                    );
+                  })}
+                </div>
+                <button className="admin-primary save-button" disabled={tacticalSaving}>
+                  {tacticalSaving ? <LoaderCircle className="spin" /> : <Save size={16} />}{' '}
+                  Enregistrer le profil
+                </button>
+              </form>
+            )}
             <div className="admin-duplicate">
               <div>
                 <span className="admin-kicker">DUPLIQUER LE PARCOURS</span>

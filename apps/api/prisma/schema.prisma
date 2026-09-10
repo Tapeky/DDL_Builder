@@ -16,6 +16,7 @@ model CatalogSnapshot {
   head          CatalogHead?
   builds        SavedBuild[]
   editorialVersions EditorialBuildVersion[]
+  tacticalProfiles TacticalHeroProfile[]
   patchesFrom   PatchChange[] @relation("PatchFrom")
   patchesTo     PatchChange[] @relation("PatchTo")
 }
@@ -62,10 +63,25 @@ model EditorialBuildVersion {
   build        EditorialBuild          @relation(fields: [buildId], references: [id])
   snapshot     CatalogSnapshot         @relation(fields: [snapshotId], references: [id])
   steps        EditorialBuildStep[]
+  investments  EditorialBuildInvestment[]
 
   @@unique([buildId, snapshotId, revision])
   @@index([buildId, snapshotId, isCurrent])
   @@index([snapshotId, status])
+}
+
+model EditorialBuildInvestment {
+  id          String                  @id
+  versionId   String
+  branch      String
+  phase       String
+  threshold   Int
+  priority    String
+  reason      String
+  version     EditorialBuildVersion  @relation(fields: [versionId], references: [id])
+
+  @@unique([versionId, branch, phase, threshold])
+  @@index([versionId, priority])
 }
 
 model EditorialBuildStep {
@@ -115,4 +131,39 @@ model SyncRun {
   status        String
   clientVersion Int?
   errorCode     String?
+}
+
+model TacticalTagDefinition {
+  key         String              @id
+  label       String
+  description String
+  active      Boolean             @default(true)
+  assignments TacticalHeroTag[]
+}
+
+model TacticalHeroProfile {
+  id         String             @id
+  snapshotId String
+  heroId     Int
+  status     String
+  source     String
+  snapshot   CatalogSnapshot    @relation(fields: [snapshotId], references: [id])
+  tags       TacticalHeroTag[]
+
+  @@unique([snapshotId, heroId])
+  @@index([snapshotId, status])
+}
+
+model TacticalHeroTag {
+  id         String                @id
+  profileId  String
+  tagKey     String
+  intensity  Int
+  evidence   String
+  status     String
+  profile    TacticalHeroProfile   @relation(fields: [profileId], references: [id])
+  tag        TacticalTagDefinition @relation(fields: [tagKey], references: [key])
+
+  @@unique([profileId, tagKey])
+  @@index([tagKey, status])
 }

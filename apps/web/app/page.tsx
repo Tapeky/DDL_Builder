@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type {
   Catalog,
   Category,
+  FarmPriority,
   Hero,
   Recommendation,
   RecommendationRequest,
@@ -110,6 +111,8 @@ export default function Home() {
   const [loadError, setLoadError] = useState('');
   const [heroId, setHeroId] = useState<number | null>(null);
   const [style, setStyle] = useState<Style>('balanced');
+  const [farmPriority, setFarmPriority] = useState<FarmPriority>(3);
+  const [opponentIds, setOpponentIds] = useState<number[]>([]);
   const [heroSearch, setHeroSearch] = useState('');
   const [showAllHeroes, setShowAllHeroes] = useState(false);
   const [itemSearch, setItemSearch] = useState('');
@@ -129,6 +132,8 @@ export default function Home() {
       setResult(build);
       setHeroId(build.hero.id);
       setStyle(build.style);
+      setFarmPriority(build.farmPriority ?? 3);
+      setOpponentIds((build.opponents ?? []).map((hero) => hero.id));
     } catch (error) {
       setBuildError(error instanceof Error ? error.message : 'Impossible de charger ce build.');
     } finally {
@@ -177,6 +182,19 @@ export default function Home() {
   function selectHero(hero: Hero) {
     if (busy) return;
     setHeroId(hero.id);
+    setOpponentIds((current) => current.filter((id) => id !== hero.id));
+    clearBuild();
+  }
+
+  function toggleOpponent(hero: Hero) {
+    if (busy) return;
+    setOpponentIds((current) =>
+      current.includes(hero.id)
+        ? current.filter((id) => id !== hero.id)
+        : current.length >= 6
+          ? current
+          : [...current, hero.id],
+    );
     clearBuild();
   }
 
@@ -200,6 +218,8 @@ export default function Home() {
       const payload: RecommendationRequest = {
         heroId: selectedHero.id,
         style,
+        farmPriority,
+        opponentHeroIds: opponentIds,
         ...(status?.version ? { version: status.version } : {}),
       };
       const build = await request<Recommendation>('/recommendations', {
@@ -470,6 +490,53 @@ export default function Home() {
                   <p className="style-description">
                     {styles.find((option) => option.id === style)?.description}
                   </p>
+                  <div className="context-control">
+                    <span className="tiny-label">QUELLE EST VOTRE PRIORITÉ DE FARM ?</span>
+                    <div className="farm-picker" aria-label="Priorité de farm">
+                      {([1, 2, 3, 4, 5, 6] as FarmPriority[]).map((priority) => (
+                        <button
+                          key={priority}
+                          className={farmPriority === priority ? 'active' : ''}
+                          aria-pressed={farmPriority === priority}
+                          disabled={busy}
+                          onClick={() => {
+                            setFarmPriority(priority);
+                            clearBuild();
+                          }}
+                        >
+                          {priority}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="style-description">
+                      1 = priorité maximale, 6 = ressources plus partagées. Cette information est
+                      enregistrée même quand aucune référence statistique n’est encore disponible.
+                    </p>
+                  </div>
+                  <div className="context-control">
+                    <div className="context-label-row">
+                      <span className="tiny-label">QUI SERA EN FACE ?</span>
+                      <small>{opponentIds.length}/6 sélectionnés</small>
+                    </div>
+                    <div className="opponent-picker" aria-label="Héros adverses">
+                      {(catalog?.heroes ?? [])
+                        .filter((hero) => hero.id !== selectedHero?.id)
+                        .map((hero) => (
+                          <button
+                            key={hero.id}
+                            className={opponentIds.includes(hero.id) ? 'active' : ''}
+                            aria-pressed={opponentIds.includes(hero.id)}
+                            disabled={busy}
+                            onClick={() => toggleOpponent(hero)}
+                          >
+                            {hero.name}
+                          </button>
+                        ))}
+                    </div>
+                    <p className="style-description">
+                      Les profils ennemis validés pourront déclencher des substitutions expliquées.
+                    </p>
+                  </div>
                   <button
                     className="generate-button"
                     disabled={busy || !selectedHero?.hasBuild || status?.state === 'unavailable'}
@@ -531,6 +598,48 @@ export default function Home() {
                       ))}
                     </ul>
                   )}
+                  <div className="context-summary">
+                    <div>
+                      <span className="tiny-label">CONTEXTE DE LA RECOMMANDATION</span>
+                      <p>
+                        Farm <strong>{result.farmPriority}/6</strong> ·{' '}
+                        {(result.opponents ?? []).length > 0
+                          ? (result.opponents ?? []).map((opponent) => opponent.name).join(', ')
+                          : 'aucun adversaire renseigné'}
+                      </p>
+                    </div>
+                    {(result.threats ?? []).length > 0 && (
+                      <ul className="threat-list">
+                        {(result.threats ?? []).map((threat) => (
+                          <li key={`${threat.heroId}-${threat.tag}`}>
+                            <strong>{threat.heroName}</strong> · {threat.explanation}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {(result.adaptations ?? []).length > 0 && (
+                      <ul className="adaptation-list">
+                        {(result.adaptations ?? []).map((adaptation) => (
+                          <li key={`${adaptation.order}-${adaptation.toItem}`}>
+                            {adaptation.fromItem} → {adaptation.toItem} · {adaptation.reason}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {(result.investments ?? []).length > 0 && (
+                      <ul className="investment-list">
+                        {(result.investments ?? []).map((investment) => (
+                          <li
+                            key={`${investment.branch}-${investment.phase}-${investment.threshold}`}
+                          >
+                            {categories[investment.branch]} · {investment.phase} ·{' '}
+                            <strong>{money(investment.threshold)} âmes</strong> ·{' '}
+                            {investment.reason}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                   <div className="phases">
                     {phases.map((phase) => (
                       <div className="phase" key={phase.id}>

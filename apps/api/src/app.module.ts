@@ -6,6 +6,7 @@ import { CatalogModule } from './catalog/catalog.module';
 import { RecommendationsModule } from './recommendations/recommendations.module';
 import { EditorialModule } from './editorial/editorial.module';
 import { AdminModule } from './admin/admin.module';
+import { TacticalModule } from './tactical/tactical.module';
 
 @Controller('health')
 class HealthController {
@@ -23,6 +24,7 @@ class HealthController {
     DatabaseModule,
     EditorialModule,
     AdminModule,
+    TacticalModule,
     CatalogModule,
     RecommendationsModule,
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),

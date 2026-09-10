@@ -1,4 +1,4 @@
-import type { EditorialBuildStatus, Phase, Style } from '@deadlock/contracts';
+import type { Category, EditorialBuildStatus, Phase, Style } from '@deadlock/contracts';
 
 export interface EditorialAlternativeInput {
   itemClassName: string;
@@ -20,8 +20,17 @@ export interface EditorialProfileInput {
   summary: string;
   status?: EditorialBuildStatus;
   steps: EditorialStepInput[];
+  investments?: EditorialInvestmentInput[];
 }
 
 export interface EditorialProfile extends EditorialProfileInput {
   status: EditorialBuildStatus;
+}
+
+export interface EditorialInvestmentInput {
+  branch: Category;
+  phase: Phase;
+  threshold: number;
+  priority: 'required' | 'preferred';
+  reason: string;
 }

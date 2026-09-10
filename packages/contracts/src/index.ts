@@ -3,6 +3,17 @@ export type Style = 'balanced' | 'damage' | 'survival';
 export type Phase = 'early' | 'core' | 'late';
 export type EditorialBuildStatus =
   'draft' | 'review' | 'validated' | 'published' | 'stale' | 'archived';
+export type FarmPriority = 1 | 2 | 3 | 4 | 5 | 6;
+export type TacticalProfileStatus = 'draft' | 'validated' | 'stale';
+export type TacticalTagKey =
+  | 'anti_heal'
+  | 'anti_mobility'
+  | 'anti_burst'
+  | 'anti_bullet'
+  | 'anti_spirit'
+  | 'anti_control'
+  | 'anti_range'
+  | 'anti_regeneration';
 
 export interface Hero {
   id: number;
@@ -45,11 +56,43 @@ export interface Catalog {
   heroes: Hero[];
   items: Item[];
   status: DataStatus;
+  tacticalTags: TacticalTagDefinition[];
+  tacticalProfiles: HeroTacticalProfile[];
+}
+
+export interface TacticalTagDefinition {
+  key: TacticalTagKey;
+  label: string;
+  description: string;
+}
+
+export interface TacticalTagAssignment {
+  key: TacticalTagKey;
+  intensity: 1 | 2 | 3;
+  evidence: string;
+  status: TacticalProfileStatus;
+}
+
+export interface HeroTacticalProfile {
+  heroId: number;
+  status: TacticalProfileStatus;
+  source: string;
+  tags: TacticalTagAssignment[];
+}
+
+export interface InvestmentTarget {
+  branch: Category;
+  phase: Phase;
+  threshold: number;
+  priority: 'required' | 'preferred';
+  reason: string;
 }
 
 export interface RecommendationRequest {
   heroId: number;
   style: Style;
+  farmPriority?: FarmPriority;
+  opponentHeroIds?: number[];
   version?: string;
 }
 
@@ -75,8 +118,29 @@ export interface Recommendation {
   buildStatus: EditorialBuildStatus;
   importedAt: string;
   totalCost: number;
+  investments: InvestmentTarget[];
+  farmPriority: FarmPriority;
+  opponents: Hero[];
+  threats: RecommendationThreat[];
+  adaptations: RecommendationAdaptation[];
   steps: BuildStep[];
   warnings: string[];
   evidence: 'editorial-draft';
   sharePath: string;
+}
+
+export interface RecommendationThreat {
+  heroId: number;
+  heroName: string;
+  tag: TacticalTagKey;
+  intensity: 1 | 2 | 3;
+  explanation: string;
+}
+
+export interface RecommendationAdaptation {
+  order: number;
+  fromItem: string;
+  toItem: string;
+  reason: string;
+  threatTags: TacticalTagKey[];
 }
