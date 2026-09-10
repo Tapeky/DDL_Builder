@@ -157,7 +157,7 @@ describe('verified reference evidence', () => {
               networthPerMin: 1_100,
               damagePerMin: 900,
               referencePlayerId: verifiedPlayer.id,
-              referencePlayer: verifiedPlayer,
+              referencePlayer: { ...verifiedPlayer, accountIds: [12, 13] },
             },
             {
               accountId: BigInt(13),
@@ -171,7 +171,7 @@ describe('verified reference evidence', () => {
               networthPerMin: 1_400,
               damagePerMin: 1_200,
               referencePlayerId: verifiedPlayer.id,
-              referencePlayer: verifiedPlayer,
+              referencePlayer: { ...verifiedPlayer, accountIds: [12, 13] },
             },
           ],
         }),
@@ -194,5 +194,12 @@ describe('verified reference evidence', () => {
         collectedAt: completedAt.toISOString(),
       }),
     ]);
+    const stored = await db.referenceStatRun.findFirst();
+    for (const stat of stored.stats) stat.referencePlayer.accountIds = [12];
+    expect(await service.forRecommendation('snapshot-test', 1)).toEqual([
+      expect.objectContaining({ matchesPlayed: 40, networthPerMin: 1_100 }),
+    ]);
+    for (const stat of stored.stats) stat.referencePlayer.heroIds = [2];
+    expect(await service.forRecommendation('snapshot-test', 1)).toEqual([]);
   });
 });

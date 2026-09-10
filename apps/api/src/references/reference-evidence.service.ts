@@ -249,7 +249,12 @@ export class ReferenceEvidenceService {
     const weights = new Map<string, number>();
     for (const stat of run.stats) {
       const player = stat.referencePlayer;
-      if (!player.verifiedAt) continue;
+      if (
+        !player.verifiedAt ||
+        !numbers(player.heroIds).includes(heroId) ||
+        !numbers(player.accountIds).includes(Number(stat.accountId))
+      )
+        continue;
       const current = evidence.get(player.id) ?? {
         playerId: player.id,
         displayName: player.displayName,
