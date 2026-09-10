@@ -32,12 +32,11 @@ Pour ouvrir le back-office local, ajouter aussi un `ADMIN_TOKEN` long et aléato
 
 ```bash
 pnpm install
-docker compose up -d --wait
-pnpm db:generate
-pnpm db:migrate
-pnpm data:sync
-pnpm dev
+pnpm dev:setup
 ```
+
+`pnpm dev:setup` démarre PostgreSQL, génère le client Prisma, applique les migrations,
+synchronise le catalogue puis lance l'API et le frontend en mode développement.
 
 - Site : http://localhost:3000
 - API : http://localhost:3001/v1/health
