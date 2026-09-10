@@ -8,7 +8,7 @@ import { Prisma } from '@prisma/client';
 import type { EditorialBuildStatus, Hero, Item, Style } from '@deadlock/contracts';
 import { randomUUID } from 'node:crypto';
 import { DatabaseService } from '../database.module';
-import { recommend, validateEditorialProfile } from '../recommendations/engine';
+import { purchaseSteps, recommend, validateEditorialProfile } from '../recommendations/engine';
 import { seedProfiles } from './seed-data';
 import type {
   EditorialAlternativeInput,
@@ -26,7 +26,13 @@ export const editorialStatuses: EditorialBuildStatus[] = [
   'archived',
 ];
 
-const cloneStatuses = new Set<EditorialBuildStatus>(['draft', 'review', 'validated', 'published']);
+const cloneStatuses = new Set<EditorialBuildStatus>([
+  'draft',
+  'review',
+  'validated',
+  'published',
+  'stale',
+]);
 
 type Transaction = Prisma.TransactionClient;
 type SnapshotRecord = Prisma.CatalogSnapshotGetPayload<{
@@ -143,6 +149,11 @@ function profileSteps(profile: EditorialProfileInput) {
   }));
 }
 
+function validateProfileAndCosts(profile: EditorialProfile, items: Item[]) {
+  validateEditorialProfile(profile, items);
+  purchaseSteps(profile.steps, items);
+}
+
 @Injectable()
 export class EditorialBuildService {
   constructor(private readonly db: DatabaseService) {}
@@ -159,8 +170,11 @@ export class EditorialBuildService {
   async ensureSnapshot(snapshotId: string) {
     const snapshot = await this.db.catalogSnapshot.findUnique({ where: { id: snapshotId } });
     if (!snapshot) throw new NotFoundException('Catalogue introuvable.');
-    const existing = await this.db.editorialBuildVersion.count({ where: { snapshotId } });
-    if (existing > 0) return;
+    const [versionCount, buildCount] = await Promise.all([
+      this.db.editorialBuildVersion.count({ where: { snapshotId } }),
+      this.db.editorialBuild.count(),
+    ]);
+    if (versionCount > 0 || buildCount > 0) return;
     await this.db.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(184742902)`;
       const alreadySeeded = await tx.editorialBuildVersion.count({ where: { snapshotId } });
@@ -307,7 +321,7 @@ export class EditorialBuildService {
       );
     }
     const profile: EditorialProfile = { ...input, status: input.status ?? 'draft' };
-    validateEditorialProfile(profile, itemsFrom(snapshot));
+    validateProfileAndCosts(profile, itemsFrom(snapshot));
     const id = `build-${input.heroId}-${input.style}`;
     const versionId = randomUUID();
     const build = await this.db.editorialBuild.create({
@@ -354,7 +368,7 @@ export class EditorialBuildService {
       status: 'draft',
       steps: input.steps ?? current.steps,
     };
-    validateEditorialProfile(profile, itemsFrom(snapshot));
+    validateProfileAndCosts(profile, itemsFrom(snapshot));
     return this.db.$transaction(async (tx) => {
       await tx.editorialBuildVersion.update({
         where: { id: build.versions[0].id },
@@ -390,7 +404,7 @@ export class EditorialBuildService {
     });
     if (!build || !build.versions[0]) throw new NotFoundException('Build éditorial introuvable.');
     const profile = inputFromVersion(build.versions[0]);
-    validateEditorialProfile(profile, itemsFrom(snapshot));
+    validateProfileAndCosts(profile, itemsFrom(snapshot));
     return this.db.editorialBuildVersion.update({
       where: { id: build.versions[0].id },
       data: { status: 'published', reviewedAt: new Date() },
@@ -491,7 +505,7 @@ export class EditorialBuildService {
     for (const seed of seedProfiles) {
       if (!heroes.has(seed.heroId)) continue;
       const profile: EditorialProfile = { ...seed, status: 'published' };
-      validateEditorialProfile(profile, items);
+      validateProfileAndCosts(profile, items);
       const id = `build-${seed.heroId}-${seed.style}`;
       const existing = await tx.editorialBuild.findUnique({
         where: { heroId_style: { heroId: seed.heroId, style: seed.style } },

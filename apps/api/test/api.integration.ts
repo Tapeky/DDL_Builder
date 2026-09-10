@@ -48,11 +48,11 @@ describe('NestJS API with isolated PostgreSQL schema', () => {
       if (url.pathname.endsWith('heroes')) {
         return Response.json(
           fixture.heroes.map((hero) =>
-            currentVersion === 102
-              ? hero.id === 6
-                ? { ...hero, name: 'Abrams après patch' }
-                : hero
-              : hero,
+            currentVersion >= 102 && hero.id === 6
+              ? { ...hero, name: 'Abrams après patch' }
+              : currentVersion >= 103 && hero.id === 2
+                ? { ...hero, name: 'Seven après patch' }
+                : hero,
           ),
         );
       }
@@ -64,7 +64,7 @@ describe('NestJS API with isolated PostgreSQL schema', () => {
           shopable: true,
           item_slot_type: index % 2 ? 'weapon' : 'spirit',
           item_tier: 1,
-          cost: currentVersion === 102 && class_name === 'upgrade_rapid_rounds' ? 1_600 : 800,
+          cost: currentVersion >= 102 && class_name === 'upgrade_rapid_rounds' ? 1_600 : 800,
         })),
       );
     });
@@ -234,6 +234,20 @@ describe('NestJS API with isolated PostgreSQL schema', () => {
       .set('Authorization', 'Bearer integration-admin-token')
       .expect(201);
     expect(archived.body.status).toBe('archived');
+    await request(app.getHttpServer())
+      .post('/v1/admin/builds')
+      .set('Authorization', 'Bearer integration-admin-token')
+      .send({
+        heroId: 99,
+        style: 'damage',
+        title: 'Progression invalide',
+        summary: 'Ce brouillon ne doit pas être accepté.',
+        steps: [
+          { order: 1, phase: 'early', itemClassName: 'upgrade_health', reason: 'Premier achat.' },
+          { order: 2, phase: 'core', itemClassName: 'upgrade_health', reason: 'Achat redondant.' },
+        ],
+      })
+      .expect(422);
     const created = await request(app.getHttpServer())
       .post('/v1/admin/builds')
       .set('Authorization', 'Bearer integration-admin-token')
@@ -299,5 +313,27 @@ describe('NestJS API with isolated PostgreSQL schema', () => {
         'build-13-survival',
       ].sort(),
     );
+
+    currentVersion = 103;
+    const secondImport = await catalog.sync();
+    const secondStatus = await request(app.getHttpServer()).get('/v1/data-status').expect(200);
+    expect(secondStatus.body.staleBuildCount).toBe(11);
+    expect(secondStatus.body.publishedBuildCount).toBe(3);
+    const secondCatalog = await request(app.getHttpServer()).get('/v1/catalog').expect(200);
+    expect(
+      secondCatalog.body.heroes.find((hero: { id: number }) => hero.id === 1).buildStatus,
+    ).toBe('stale');
+    expect(
+      secondCatalog.body.heroes.find((hero: { id: number }) => hero.id === 2).buildStatus,
+    ).toBe('stale');
+    const secondChanges = await db.patchChange.findFirst({
+      where: { toSnapshotId: secondImport.version },
+    });
+    expect(secondChanges?.changedHeroes).toEqual([2]);
+    expect(secondChanges?.staleBuilds).toEqual([
+      'build-2-balanced',
+      'build-2-damage',
+      'build-2-survival',
+    ]);
   });
 });
