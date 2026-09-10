@@ -149,47 +149,55 @@ export class TacticalService {
     },
   ) {
     await this.ensureSnapshot(snapshotId);
-    const tags = input.tags ?? [];
+    const tags = input.tags;
     const seen = new Set<string>();
-    for (const tag of tags) {
-      if (!definitionKeys.has(tag.key) || seen.has(tag.key)) {
-        throw new UnprocessableEntityException(
-          'Les tags tactiques doivent être connus et uniques.',
-        );
+    if (tags !== undefined) {
+      for (const tag of tags) {
+        if (!definitionKeys.has(tag.key) || seen.has(tag.key)) {
+          throw new UnprocessableEntityException(
+            'Les tags tactiques doivent être connus et uniques.',
+          );
+        }
+        if (!Number.isInteger(tag.intensity) || tag.intensity < 1 || tag.intensity > 3) {
+          throw new UnprocessableEntityException(
+            'L’intensité d’un tag tactique doit être comprise entre 1 et 3.',
+          );
+        }
+        if (!tag.evidence.trim()) {
+          throw new UnprocessableEntityException(
+            'Chaque tag tactique doit citer une justification.',
+          );
+        }
+        seen.add(tag.key);
       }
-      if (!Number.isInteger(tag.intensity) || tag.intensity < 1 || tag.intensity > 3) {
-        throw new UnprocessableEntityException(
-          'L’intensité d’un tag tactique doit être comprise entre 1 et 3.',
-        );
-      }
-      if (!tag.evidence.trim()) {
-        throw new UnprocessableEntityException('Chaque tag tactique doit citer une justification.');
-      }
-      seen.add(tag.key);
     }
     const profile = await this.db.tacticalHeroProfile.findUnique({
       where: { snapshotId_heroId: { snapshotId, heroId } },
     });
     if (!profile) throw new NotFoundException('Profil tactique introuvable.');
     return this.db.$transaction(async (tx) => {
-      await tx.tacticalHeroTag.deleteMany({ where: { profileId: profile.id } });
-      await tx.tacticalHeroProfile.update({
+      const data: Prisma.TacticalHeroProfileUpdateInput = {
+        status: input.status ?? profile.status,
+        source: input.source?.trim() || profile.source,
+      };
+      if (tags !== undefined) {
+        await tx.tacticalHeroTag.deleteMany({ where: { profileId: profile.id } });
+        data.tags = {
+          create: tags.map((tag) => ({
+            id: randomUUID(),
+            tagKey: tag.key,
+            intensity: tag.intensity,
+            evidence: tag.evidence.trim(),
+            status: tag.status,
+          })),
+        };
+      }
+      const updated = await tx.tacticalHeroProfile.update({
         where: { id: profile.id },
-        data: {
-          status: input.status ?? profile.status,
-          source: input.source?.trim() || profile.source,
-          tags: {
-            create: tags.map((tag) => ({
-              id: randomUUID(),
-              tagKey: tag.key,
-              intensity: tag.intensity,
-              evidence: tag.evidence.trim(),
-              status: tag.status,
-            })),
-          },
-        },
+        data,
         include: { tags: { orderBy: { tagKey: 'asc' } } },
       });
+      return toProfile(updated);
     });
   }
 

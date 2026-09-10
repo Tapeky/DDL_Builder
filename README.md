@@ -97,23 +97,23 @@ Le seed de départ est dans `apps/api/src/editorial/seed-data.ts`, tandis que `a
 
 ## API
 
-| Route                                       | Fonction                                                                       |
-| ------------------------------------------- | ------------------------------------------------------------------------------ |
-| `GET /v1/health`                            | Vérification du service et de PostgreSQL                                       |
-| `GET /v1/catalog`                           | Héros, objets, tags tactiques et profils versionnés                            |
-| `GET /v1/data-status`                       | Source, version, dates et fraîcheur                                            |
-| `GET /v1/heroes?version=...`                | Héros d’une version importée                                                   |
-| `GET /v1/items?version=...&category=spirit` | Objets et filtre de catégorie                                                  |
-| `GET /v1/tactical-profiles?version=...`     | Tags disponibles et profils tactiques d’une version                            |
+| Route                                       | Fonction                                                                             |
+| ------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `GET /v1/health`                            | Vérification du service et de PostgreSQL                                             |
+| `GET /v1/catalog`                           | Héros, objets, tags tactiques et profils versionnés                                  |
+| `GET /v1/data-status`                       | Source, version, dates et fraîcheur                                                  |
+| `GET /v1/heroes?version=...`                | Héros d’une version importée                                                         |
+| `GET /v1/items?version=...&category=spirit` | Objets et filtre de catégorie                                                        |
+| `GET /v1/tactical-profiles?version=...`     | Tags disponibles et profils tactiques d’une version                                  |
 | `POST /v1/recommendations`                  | `{ "heroId": 1, "style": "balanced", "farmPriority": 1, "opponentHeroIds": [2, 6] }` |
-| `GET /v1/builds/:id`                        | Payload immuable du build partagé                                              |
-| `GET /v1/admin/builds`                      | Liste protégée des révisions éditoriales courantes                             |
-| `GET /v1/admin/builds/:id`                  | Détail protégé d’un build éditorial                                            |
-| `PATCH /v1/admin/builds/:id`                | Crée une nouvelle révision brouillon                                           |
-| `POST /v1/admin/builds/:id/publish`         | Valide les objets et publie la révision courante                               |
-| `POST /v1/admin/builds/:id/archive`         | Archive la révision courante                                                   |
-| `GET /v1/admin/tactical-profiles`           | Liste protégée des profils tactiques et définitions de tags                    |
-| `PATCH /v1/admin/tactical-profiles/:heroId` | Révise les tags, leur intensité, leur preuve et le statut du profil             |
+| `GET /v1/builds/:id`                        | Payload immuable du build partagé                                                    |
+| `GET /v1/admin/builds`                      | Liste protégée des révisions éditoriales courantes                                   |
+| `GET /v1/admin/builds/:id`                  | Détail protégé d’un build éditorial                                                  |
+| `PATCH /v1/admin/builds/:id`                | Crée une nouvelle révision brouillon                                                 |
+| `POST /v1/admin/builds/:id/publish`         | Valide les objets et publie la révision courante                                     |
+| `POST /v1/admin/builds/:id/archive`         | Archive la révision courante                                                         |
+| `GET /v1/admin/tactical-profiles`           | Liste protégée des profils tactiques et définitions de tags                          |
+| `PATCH /v1/admin/tactical-profiles/:heroId` | Révise les tags, leur intensité, leur preuve et le statut du profil                  |
 
 Les champs inconnus sont rejetés. Les IDs d’objets sont des nombres JavaScript entiers, sans conversion en entier SQL signé 32 bits. Un héros sans règles reçoit une réponse 422 plutôt qu’un build générique présenté comme personnalisé.
 

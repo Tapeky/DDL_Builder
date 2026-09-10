@@ -128,7 +128,7 @@ describe('NestJS API with isolated PostgreSQL schema', () => {
   });
 
   it('exposes only validated tactical tags to the recommendation engine', async () => {
-    await request(app.getHttpServer())
+    const savedProfile = await request(app.getHttpServer())
       .patch('/v1/admin/tactical-profiles/2')
       .set('Authorization', 'Bearer integration-admin-token')
       .send({
@@ -144,6 +144,13 @@ describe('NestJS API with isolated PostgreSQL schema', () => {
         ],
       })
       .expect(200);
+    expect(savedProfile.body.tags[0].key).toBe('anti_heal');
+    const statusOnly = await request(app.getHttpServer())
+      .patch('/v1/admin/tactical-profiles/2')
+      .set('Authorization', 'Bearer integration-admin-token')
+      .send({ status: 'validated' })
+      .expect(200);
+    expect(statusOnly.body.tags[0].key).toBe('anti_heal');
     const response = await request(app.getHttpServer())
       .post('/v1/recommendations')
       .send({ heroId: 1, style: 'balanced', opponentHeroIds: [2] })
@@ -283,6 +290,26 @@ describe('NestJS API with isolated PostgreSQL schema', () => {
       .set('Authorization', 'Bearer integration-admin-token')
       .expect(201);
     expect(published.body.status).toBe('published');
+    const invested = await request(app.getHttpServer())
+      .patch('/v1/admin/builds/build-2-balanced')
+      .set('Authorization', 'Bearer integration-admin-token')
+      .send({
+        investments: [
+          {
+            branch: 'weapon',
+            phase: 'core',
+            threshold: 3_200,
+            priority: 'preferred',
+            reason: 'Conserver le palier utile à cet archétype.',
+          },
+        ],
+      })
+      .expect(200);
+    expect(invested.body.investments).toHaveLength(1);
+    await request(app.getHttpServer())
+      .post('/v1/admin/builds/build-2-balanced/publish')
+      .set('Authorization', 'Bearer integration-admin-token')
+      .expect(201);
     const archived = await request(app.getHttpServer())
       .post(`/v1/admin/builds/${id}/archive`)
       .set('Authorization', 'Bearer integration-admin-token')
@@ -377,9 +404,7 @@ describe('NestJS API with isolated PostgreSQL schema', () => {
     expect(
       secondCatalog.body.heroes.find((hero: { id: number }) => hero.id === 1).buildStatus,
     ).toBe('stale');
-    const tactical = await request(app.getHttpServer())
-      .get('/v1/tactical-profiles')
-      .expect(200);
+    const tactical = await request(app.getHttpServer()).get('/v1/tactical-profiles').expect(200);
     expect(
       tactical.body.profiles.find((profile: { heroId: number }) => profile.heroId === 2).status,
     ).toBe('stale');
@@ -394,6 +419,18 @@ describe('NestJS API with isolated PostgreSQL schema', () => {
       'build-2-balanced',
       'build-2-damage',
       'build-2-survival',
+    ]);
+    const cloned = await request(app.getHttpServer())
+      .get('/v1/admin/builds/build-2-balanced')
+      .set('Authorization', 'Bearer integration-admin-token')
+      .expect(200);
+    expect(cloned.body.version.investments).toEqual([
+      expect.objectContaining({
+        branch: 'weapon',
+        phase: 'core',
+        threshold: 3_200,
+        priority: 'preferred',
+      }),
     ]);
   });
 });

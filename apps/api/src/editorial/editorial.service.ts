@@ -460,9 +460,11 @@ export class EditorialBuildService {
     const diff = diffCatalog(previous, next);
     const oldVersions = await tx.editorialBuildVersion.findMany({
       where: { snapshotId: previous.id, isCurrent: true, status: { in: [...cloneStatuses] } },
+      orderBy: { buildId: 'asc' },
       include: {
         build: true,
         steps: { include: { alternatives: true }, orderBy: { order: 'asc' } },
+        investments: true,
       },
     });
     const changedHeroes = new Set(diff.changedHeroes);
@@ -504,6 +506,16 @@ export class EditorialBuildService {
                   reason: alternative.reason,
                 })),
               },
+            })),
+          },
+          investments: {
+            create: version.investments.map((investment) => ({
+              id: randomUUID(),
+              branch: investment.branch,
+              phase: investment.phase,
+              threshold: investment.threshold,
+              priority: investment.priority,
+              reason: investment.reason,
             })),
           },
         },
