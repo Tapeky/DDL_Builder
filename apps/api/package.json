@@ -1,0 +1,46 @@
+{
+  "name": "@deadlock/api",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "nest start --watch",
+    "build": "nest build",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit",
+    "test": "jest --runInBand",
+    "test:integration": "jest --runInBand --config jest.integration.config.mjs",
+    "db:generate": "prisma generate",
+    "db:migrate": "dotenv -e ../../.env -- prisma migrate deploy",
+    "data:sync": "pnpm build && node dist/sync.js"
+  },
+  "dependencies": {
+    "@deadlock/contracts": "workspace:*",
+    "@nestjs/common": "^11.1.12",
+    "@nestjs/core": "^11.1.12",
+    "@nestjs/platform-express": "^11.1.12",
+    "@nestjs/swagger": "^11.2.6",
+    "@nestjs/throttler": "^6.5.0",
+    "@prisma/client": "6.19.3",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.3",
+    "dotenv": "^17.3.1",
+    "helmet": "^8.1.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.16",
+    "@nestjs/testing": "^11.1.12",
+    "@types/express": "^5.0.6",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^24.10.0",
+    "@types/supertest": "^6.0.3",
+    "dotenv-cli": "^11.0.0",
+    "jest": "^29.7.0",
+    "prisma": "6.19.3",
+    "supertest": "^7.2.2",
+    "ts-jest": "^29.4.6",
+    "typescript": "~5.9.3"
+  }
+}
