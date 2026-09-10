@@ -7,6 +7,7 @@
   },
   "scripts": {
     "dev": "pnpm --parallel --filter @deadlock/api --filter @deadlock/web dev",
+    "dev:setup": "node scripts/dev-setup.mjs",
     "start": "pnpm --parallel --filter @deadlock/api --filter @deadlock/web start",
     "build": "pnpm --filter @deadlock/api build && pnpm --filter @deadlock/web build",
     "typecheck": "pnpm -r typecheck",
