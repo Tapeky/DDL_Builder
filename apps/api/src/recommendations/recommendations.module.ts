@@ -6,7 +6,8 @@ import type { Recommendation, Style } from '@deadlock/contracts';
 import { DatabaseService } from '../database.module';
 import { CatalogModule } from '../catalog/catalog.module';
 import { CatalogService } from '../catalog/catalog.service';
-import { recommend } from './engine';
+import { EditorialModule } from '../editorial/editorial.module';
+import { EditorialBuildService } from '../editorial/editorial.service';
 
 class RecommendationDto {
   @ApiProperty({ example: 1 })
@@ -38,6 +39,7 @@ class RecommendationsController {
   constructor(
     private readonly catalog: CatalogService,
     private readonly db: DatabaseService,
+    private readonly editorial: EditorialBuildService,
   ) {}
 
   @Post('recommendations')
@@ -46,7 +48,7 @@ class RecommendationsController {
     const hero = snapshot.heroes.find((hero) => hero.id === input.heroId);
     if (!hero) throw new NotFoundException('Héros introuvable.');
     const draft = {
-      ...recommend(hero, input.style, snapshot.items),
+      ...(await this.editorial.recommendation(hero, input.style, snapshot)),
       hero,
       style: input.style,
       version: snapshot.id,
@@ -70,5 +72,8 @@ class RecommendationsController {
   }
 }
 
-@Module({ imports: [CatalogModule], controllers: [RecommendationsController] })
+@Module({
+  imports: [CatalogModule, EditorialModule],
+  controllers: [RecommendationsController],
+})
 export class RecommendationsModule {}

@@ -4,6 +4,8 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { DatabaseModule, DatabaseService } from './database.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { RecommendationsModule } from './recommendations/recommendations.module';
+import { EditorialModule } from './editorial/editorial.module';
+import { AdminModule } from './admin/admin.module';
 
 @Controller('health')
 class HealthController {
@@ -19,6 +21,8 @@ class HealthController {
 @Module({
   imports: [
     DatabaseModule,
+    EditorialModule,
+    AdminModule,
     CatalogModule,
     RecommendationsModule,
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),

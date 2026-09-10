@@ -1,6 +1,8 @@
 export type Category = 'weapon' | 'vitality' | 'spirit';
 export type Style = 'balanced' | 'damage' | 'survival';
 export type Phase = 'early' | 'core' | 'late';
+export type EditorialBuildStatus =
+  'draft' | 'review' | 'validated' | 'published' | 'stale' | 'archived';
 
 export interface Hero {
   id: number;
@@ -10,6 +12,8 @@ export interface Hero {
   portrait: string | null;
   complexity: number;
   hasBuild: boolean;
+  buildStatus?:
+    Exclude<EditorialBuildStatus, 'draft' | 'review' | 'validated' | 'archived'> | 'none';
 }
 
 export interface Item {
@@ -32,6 +36,8 @@ export interface DataStatus {
   source: string;
   heroCount: number;
   itemCount: number;
+  publishedBuildCount?: number;
+  staleBuildCount?: number;
   notice: string;
 }
 
@@ -54,6 +60,7 @@ export interface BuildStep {
   purchaseCost: number;
   reason: string;
   replaces: number[];
+  alternatives: Item[];
 }
 
 export interface Recommendation {
@@ -64,6 +71,8 @@ export interface Recommendation {
   summary: string;
   version: string;
   engineVersion: string;
+  buildVersionId: string;
+  buildStatus: EditorialBuildStatus;
   importedAt: string;
   totalCost: number;
   steps: BuildStep[];

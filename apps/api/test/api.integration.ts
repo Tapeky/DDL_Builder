@@ -19,10 +19,13 @@ describe('NestJS API with isolated PostgreSQL schema', () => {
   let currentVersion = 100;
   let schema: string;
   let originalUrl: string;
+  let originalAdminToken: string | undefined;
 
   beforeAll(async () => {
     originalUrl = process.env.DATABASE_URL!;
     if (!originalUrl) throw new Error('DATABASE_URL is required for integration tests');
+    originalAdminToken = process.env.ADMIN_TOKEN;
+    process.env.ADMIN_TOKEN = 'integration-admin-token';
     schema = `test_${randomUUID().replaceAll('-', '')}`;
     const url = new URL(originalUrl);
     url.searchParams.set('schema', schema);
@@ -42,7 +45,17 @@ describe('NestJS API with isolated PostgreSQL schema', () => {
       if (url.pathname.endsWith('client-versions')) return Response.json([currentVersion]);
       expect(url.searchParams.get('client_version')).toBe(String(currentVersion));
       expect(url.searchParams.get('language')).toBe('french');
-      if (url.pathname.endsWith('heroes')) return Response.json(fixture.heroes);
+      if (url.pathname.endsWith('heroes')) {
+        return Response.json(
+          fixture.heroes.map((hero) =>
+            currentVersion >= 102 && hero.id === 6
+              ? { ...hero, name: 'Abrams après patch' }
+              : currentVersion >= 103 && hero.id === 2
+                ? { ...hero, name: 'Seven après patch' }
+                : hero,
+          ),
+        );
+      }
       return Response.json(
         fixture.classes.map((class_name, index) => ({
           id: 3_000_000_000 + index,
@@ -51,7 +64,7 @@ describe('NestJS API with isolated PostgreSQL schema', () => {
           shopable: true,
           item_slot_type: index % 2 ? 'weapon' : 'spirit',
           item_tier: 1,
-          cost: 800,
+          cost: currentVersion >= 102 && class_name === 'upgrade_rapid_rounds' ? 1_600 : 800,
         })),
       );
     });
@@ -61,6 +74,8 @@ describe('NestJS API with isolated PostgreSQL schema', () => {
     source?.mockRestore();
     await app?.close();
     process.env.DATABASE_URL = originalUrl;
+    if (originalAdminToken === undefined) delete process.env.ADMIN_TOKEN;
+    else process.env.ADMIN_TOKEN = originalAdminToken;
     if (schema && originalUrl) {
       const cleanup = new PrismaClient();
       await cleanup.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
@@ -183,5 +198,142 @@ describe('NestJS API with isolated PostgreSQL schema', () => {
     const response = await request(app.getHttpServer()).get('/v1/catalog').expect(200);
     expect(response.body.status.state).toBe('stale');
     expect(response.body.heroes).not.toHaveLength(0);
+  });
+
+  it('protects the editorial back-office and keeps revisions explicit', async () => {
+    await request(app.getHttpServer()).get('/v1/admin/builds').expect(401);
+    await request(app.getHttpServer())
+      .get('/v1/admin/builds')
+      .set('Authorization', 'Bearer wrong-token')
+      .expect(401);
+    const list = await request(app.getHttpServer())
+      .get('/v1/admin/builds')
+      .set('Authorization', 'Bearer integration-admin-token')
+      .expect(200);
+    expect(list.body.builds).toHaveLength(15);
+    const id = 'build-1-balanced';
+    const before = await request(app.getHttpServer())
+      .get(`/v1/admin/builds/${id}`)
+      .set('Authorization', 'Bearer integration-admin-token')
+      .expect(200);
+    expect(before.body.version.status).toBe('published');
+    const revised = await request(app.getHttpServer())
+      .patch(`/v1/admin/builds/${id}`)
+      .set('Authorization', 'Bearer integration-admin-token')
+      .send({ title: 'Titre révisé depuis le back-office' })
+      .expect(200);
+    expect(revised.body.status).toBe('draft');
+    expect(revised.body.revision).toBe(2);
+    const published = await request(app.getHttpServer())
+      .post(`/v1/admin/builds/${id}/publish`)
+      .set('Authorization', 'Bearer integration-admin-token')
+      .expect(201);
+    expect(published.body.status).toBe('published');
+    const archived = await request(app.getHttpServer())
+      .post(`/v1/admin/builds/${id}/archive`)
+      .set('Authorization', 'Bearer integration-admin-token')
+      .expect(201);
+    expect(archived.body.status).toBe('archived');
+    await request(app.getHttpServer())
+      .post('/v1/admin/builds')
+      .set('Authorization', 'Bearer integration-admin-token')
+      .send({
+        heroId: 99,
+        style: 'damage',
+        title: 'Progression invalide',
+        summary: 'Ce brouillon ne doit pas être accepté.',
+        steps: [
+          { order: 1, phase: 'early', itemClassName: 'upgrade_health', reason: 'Premier achat.' },
+          { order: 2, phase: 'core', itemClassName: 'upgrade_health', reason: 'Achat redondant.' },
+        ],
+      })
+      .expect(422);
+    const created = await request(app.getHttpServer())
+      .post('/v1/admin/builds')
+      .set('Authorization', 'Bearer integration-admin-token')
+      .send({
+        heroId: 99,
+        style: 'balanced',
+        title: 'Build de test éditorial',
+        summary: 'Un brouillon de test.',
+        steps: [
+          {
+            order: 1,
+            phase: 'early',
+            itemClassName: 'upgrade_health',
+            reason: 'Test de création.',
+          },
+        ],
+      })
+      .expect(201);
+    expect(created.body.versions[0].status).toBe('draft');
+    await request(app.getHttpServer())
+      .post('/v1/admin/builds/build-99-balanced/archive')
+      .set('Authorization', 'Bearer integration-admin-token')
+      .expect(201);
+  });
+
+  it('marks builds that reference changed heroes or items as stale on a new client version', async () => {
+    currentVersion = 102;
+    const imported = await catalog.sync();
+    const status = await request(app.getHttpServer()).get('/v1/data-status').expect(200);
+    expect(status.body.staleBuildCount).toBe(8);
+    expect(status.body.publishedBuildCount).toBe(6);
+    const current = await request(app.getHttpServer()).get('/v1/catalog').expect(200);
+    expect(current.body.heroes.find((hero: { id: number }) => hero.id === 1).buildStatus).toBe(
+      'stale',
+    );
+    expect(current.body.heroes.find((hero: { id: number }) => hero.id === 2).buildStatus).toBe(
+      'published',
+    );
+    expect(current.body.heroes.find((hero: { id: number }) => hero.id === 6).buildStatus).toBe(
+      'stale',
+    );
+    await request(app.getHttpServer())
+      .post('/v1/recommendations')
+      .send({ heroId: 1, style: 'damage' })
+      .expect(422);
+    const unaffected = await request(app.getHttpServer())
+      .post('/v1/recommendations')
+      .send({ heroId: 2, style: 'balanced' })
+      .expect(201);
+    expect(unaffected.body.buildStatus).toBe('published');
+    const changes = await db.patchChange.findFirst({ where: { toSnapshotId: imported.version } });
+    expect(changes?.changedHeroes).toEqual([6]);
+    expect(changes?.changedItems).toEqual(['upgrade_rapid_rounds']);
+    expect((changes?.staleBuilds as string[]).sort()).toEqual(
+      [
+        'build-1-damage',
+        'build-1-survival',
+        'build-6-balanced',
+        'build-6-damage',
+        'build-6-survival',
+        'build-13-balanced',
+        'build-13-damage',
+        'build-13-survival',
+      ].sort(),
+    );
+
+    currentVersion = 103;
+    const secondImport = await catalog.sync();
+    const secondStatus = await request(app.getHttpServer()).get('/v1/data-status').expect(200);
+    expect(secondStatus.body.staleBuildCount).toBe(11);
+    expect(secondStatus.body.publishedBuildCount).toBe(3);
+    const secondCatalog = await request(app.getHttpServer()).get('/v1/catalog').expect(200);
+    expect(
+      secondCatalog.body.heroes.find((hero: { id: number }) => hero.id === 1).buildStatus,
+    ).toBe('stale');
+    expect(
+      secondCatalog.body.heroes.find((hero: { id: number }) => hero.id === 2).buildStatus,
+    ).toBe('stale');
+    const secondChanges = await db.patchChange.findFirst({
+      where: { toSnapshotId: secondImport.version },
+    });
+    expect(secondChanges?.changedHeroes).toEqual([2]);
+    expect(secondChanges?.staleBuilds).toEqual([
+      'build-2-balanced',
+      'build-2-damage',
+      'build-2-survival',
+    ]);
   });
 });

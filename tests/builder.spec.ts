@@ -65,3 +65,19 @@ test('an unavailable shared link has a clear error', async ({ page }) => {
   await expect(page.getByRole('main').getByRole('alert')).toContainText('introuvable');
   await expect(page.locator('#resultat')).toHaveCount(0);
 });
+
+test('the editorial back-office requires a token and exposes the current build list', async ({
+  page,
+}) => {
+  await page.goto('/admin');
+  await page.getByRole('textbox', { name: 'Jeton administrateur' }).fill('wrong-token');
+  await page.getByRole('button', { name: 'Ouvrir le back-office' }).click();
+  await expect(page.getByRole('main').getByRole('alert')).toContainText('invalide');
+  await page.getByRole('textbox', { name: 'Jeton administrateur' }).fill('ci-admin-token');
+  await page.getByRole('button', { name: 'Ouvrir le back-office' }).click();
+  await expect(page.getByText('Back-office connecté.')).toBeVisible();
+  await expect(page.locator('.admin-build-row').first()).toContainText('Infernus');
+  await expect(page.locator('.admin-build-row').first()).toContainText('published');
+  await expect(page.getByRole('textbox', { name: 'Titre' })).toHaveValue('Entretenir la flamme');
+  await expect(page.locator('fieldset.admin-step')).toHaveCount(8);
+});
