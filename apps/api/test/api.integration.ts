@@ -71,6 +71,38 @@ describe('NestJS API with isolated PostgreSQL schema', () => {
           ],
         });
       }
+      if (url.pathname === '/v1/players/hero-stats') {
+        expect(url.searchParams.get('account_ids')).toBe('12345,67890');
+        expect(url.searchParams.get('hero_ids')).toBe('1');
+        return Response.json([
+          {
+            account_id: 12345,
+            hero_id: 1,
+            matches_played: 40,
+            last_played: 1_788_979_891,
+            time_played: 80_000,
+            wins: 21,
+            kills_per_min: 0.25,
+            deaths_per_min: 0.2,
+            assists_per_min: 0.4,
+            networth_per_min: 1_100,
+            damage_per_min: 900,
+          },
+          {
+            account_id: 67890,
+            hero_id: 1,
+            matches_played: 20,
+            last_played: 1_788_979_791,
+            time_played: 40_000,
+            wins: 10,
+            kills_per_min: 0.4,
+            deaths_per_min: 0.3,
+            assists_per_min: 0.5,
+            networth_per_min: 1_400,
+            damage_per_min: 1_200,
+          },
+        ]);
+      }
       expect(url.searchParams.get('client_version')).toBe(String(currentVersion));
       expect(url.searchParams.get('language')).toBe('french');
       if (url.pathname.endsWith('heroes')) {
@@ -235,6 +267,33 @@ describe('NestJS API with isolated PostgreSQL schema', () => {
     expect(
       await db.referencePlayer.findUnique({ where: { id: 'leaderboard-specialist-eu' } }),
     ).toMatchObject({ verificationStatus: 'pending' });
+  });
+
+  it('uses collected stats from verified players as recommendation context', async () => {
+    const collected = await request(app.getHttpServer())
+      .post('/v1/admin/reference-stats/collect')
+      .set('Authorization', 'Bearer integration-admin-token')
+      .send({ heroId: 1, minUnixTimestamp: 1_786_320_000 })
+      .expect(201);
+    expect(collected.body).toMatchObject({
+      status: 'succeeded',
+      playerCount: 1,
+      rowCount: 2,
+    });
+
+    const recommendation = await request(app.getHttpServer())
+      .post('/v1/recommendations')
+      .send({ heroId: 1, style: 'balanced' })
+      .expect(201);
+    expect(recommendation.body.referenceEvidence).toEqual([
+      expect.objectContaining({
+        playerId: 'specialist-infernus-eu',
+        displayName: 'Specialist EU',
+        matchesPlayed: 60,
+        killsPerMin: 0.3,
+        networthPerMin: 1_200,
+      }),
+    ]);
   });
 
   it('exposes only validated tactical tags to the recommendation engine', async () => {

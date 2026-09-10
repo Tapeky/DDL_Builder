@@ -19,6 +19,7 @@ model CatalogSnapshot {
   tacticalProfiles TacticalHeroProfile[]
   analyticsRuns AnalyticsRun[]
   leaderboardRuns LeaderboardRun[]
+  referenceStatRuns ReferenceStatRun[]
   patchesFrom   PatchChange[] @relation("PatchFrom")
   patchesTo     PatchChange[] @relation("PatchTo")
 }
@@ -149,8 +150,49 @@ model ReferencePlayer {
   notes               String
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
+  heroStats           ReferenceHeroStat[]
 
   @@index([verificationStatus, region])
+}
+
+model ReferenceStatRun {
+  id          String              @id
+  snapshotId  String
+  heroId      Int
+  status      String
+  source      String
+  filters     Json
+  playerCount Int?
+  rowCount    Int?
+  errorCode   String?
+  startedAt   DateTime            @default(now())
+  completedAt DateTime?
+  snapshot    CatalogSnapshot     @relation(fields: [snapshotId], references: [id])
+  stats       ReferenceHeroStat[]
+
+  @@index([snapshotId, heroId, status, completedAt])
+}
+
+model ReferenceHeroStat {
+  id                String           @id
+  runId             String
+  referencePlayerId String
+  accountId         BigInt
+  heroId            Int
+  matchesPlayed     BigInt
+  wins              BigInt
+  lastPlayed        Int
+  timePlayed        BigInt
+  killsPerMin       Float
+  deathsPerMin      Float
+  assistsPerMin     Float
+  networthPerMin    Float
+  damagePerMin      Float
+  run               ReferenceStatRun @relation(fields: [runId], references: [id])
+  referencePlayer   ReferencePlayer  @relation(fields: [referencePlayerId], references: [id])
+
+  @@unique([runId, referencePlayerId, accountId, heroId])
+  @@index([referencePlayerId, heroId, matchesPlayed])
 }
 
 model LeaderboardRun {

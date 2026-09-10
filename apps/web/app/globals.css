@@ -950,6 +950,82 @@ footer a svg {
   line-height: 1.7;
   padding: 12px 0 0 17px;
 }
+.reference-evidence {
+  border: 1px solid #43533a;
+  background: #11170f;
+  padding: 18px;
+  margin-top: 18px;
+}
+.reference-heading {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  color: var(--lime);
+}
+.reference-heading h4 {
+  color: var(--cream);
+  font:
+    500 20px 'Barlow Condensed',
+    sans-serif;
+  margin-top: 4px;
+}
+.reference-disclaimer {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.7;
+  margin-top: 12px;
+}
+.reference-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+  margin-top: 15px;
+}
+.reference-card {
+  border: 1px solid var(--line);
+  background: #181e16;
+  padding: 14px;
+}
+.reference-card > div:first-child {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.reference-card h5 {
+  font-size: 12px;
+}
+.reference-card span,
+.reference-card small {
+  color: var(--muted);
+  font-size: 8px;
+}
+.reference-card small a {
+  color: var(--lime);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.reference-card > strong {
+  display: block;
+  color: var(--lime);
+  font-size: 10px;
+  margin-top: 8px;
+}
+.reference-card dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 13px 0;
+}
+.reference-card dt {
+  color: var(--muted);
+  font-size: 8px;
+  margin-bottom: 3px;
+}
+.reference-card dd {
+  color: var(--cream);
+  font-size: 10px;
+}
 .phases {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

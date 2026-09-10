@@ -31,6 +31,8 @@ import { EditorialBuildService } from '../editorial/editorial.service';
 import { TacticalModule } from '../tactical/tactical.module';
 import { TacticalService } from '../tactical/tactical.service';
 import { adaptContext } from './adaptive';
+import { ReferencesModule } from '../references/references.module';
+import { ReferenceEvidenceService } from '../references/reference-evidence.service';
 
 class RecommendationDto {
   @ApiProperty({ example: 1 })
@@ -82,6 +84,7 @@ class RecommendationsController {
     private readonly db: DatabaseService,
     private readonly editorial: EditorialBuildService,
     private readonly tactical: TacticalService,
+    private readonly referenceEvidence: ReferenceEvidenceService,
   ) {}
 
   @Post('recommendations')
@@ -108,6 +111,7 @@ class RecommendationsController {
       definitions: this.tactical.definitions(),
     });
     const base = await this.editorial.recommendation(hero, input.style, snapshot);
+    const referenceEvidence = await this.referenceEvidence.forRecommendation(snapshot.id, hero.id);
     const draft = {
       ...base,
       hero,
@@ -122,6 +126,7 @@ class RecommendationsController {
         input.farmPriority !== undefined || input.opponentHeroIds !== undefined
           ? [...base.warnings, ...adaptive.warnings]
           : base.warnings,
+      referenceEvidence,
     };
     const id = createHash('sha256').update(JSON.stringify(draft)).digest('hex').slice(0, 32);
     const payload: Recommendation = { ...draft, id, sharePath: `/?build=${id}` };
@@ -142,7 +147,7 @@ class RecommendationsController {
 }
 
 @Module({
-  imports: [CatalogModule, EditorialModule, TacticalModule],
+  imports: [CatalogModule, EditorialModule, TacticalModule, ReferencesModule],
   controllers: [RecommendationsController],
 })
 export class RecommendationsModule {}

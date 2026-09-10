@@ -10,7 +10,7 @@ import type {
 } from '@deadlock/contracts';
 import type { EditorialProfile, EditorialStepInput } from '../editorial/types';
 
-export const ENGINE_VERSION = 'editorial-0.2.0';
+export const ENGINE_VERSION = 'editorial-0.3.0';
 
 export function validateEditorialProfile(profile: EditorialProfile, items: Item[]) {
   if (!['balanced', 'damage', 'survival'].includes(profile.style)) {
