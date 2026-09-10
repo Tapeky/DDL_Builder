@@ -131,11 +131,14 @@ export class ReferencePlayerService {
     return players.map(toPlayer);
   }
 
-  async create(input: ReferencePlayerInput) {
+  async create(
+    input: ReferencePlayerInput,
+    db: Pick<DatabaseService, 'referencePlayer'> = this.db,
+  ) {
     const value = validate(input);
-    const existing = await this.db.referencePlayer.findUnique({ where: { id: value.id } });
+    const existing = await db.referencePlayer.findUnique({ where: { id: value.id } });
     if (existing) throw new ConflictException('Cet identifiant de joueur existe déjà.');
-    const player = await this.db.referencePlayer.create({
+    const player = await db.referencePlayer.create({
       data: {
         ...value,
         accountIds: json(value.accountIds),

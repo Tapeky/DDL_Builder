@@ -17,6 +17,8 @@ export type TacticalTagKey =
 export type ReferencePlayerVerificationStatus = 'pending' | 'verified' | 'stale' | 'rejected';
 export type AnalyticsRunStatus = 'running' | 'succeeded' | 'failed';
 export type AnalyticsMetric = 'item-stats';
+export type LeaderboardRegion = 'Europe' | 'Asia' | 'NAmerica' | 'SAmerica' | 'Oceania';
+export type LeaderboardCandidateStatus = 'pending' | 'promoted' | 'rejected';
 
 export interface Hero {
   id: number;
@@ -198,6 +200,30 @@ export interface AnalyticsRunSummary {
   status: AnalyticsRunStatus;
   source: string;
   filters: AnalyticsFilters;
+  rowCount: number | null;
+  errorCode: string | null;
+  startedAt: string;
+  completedAt: string | null;
+}
+
+export interface LeaderboardCandidate {
+  id: string;
+  runId: string;
+  accountName: string | null;
+  possibleAccountIds: number[];
+  rank: number | null;
+  topHeroIds: number[];
+  status: LeaderboardCandidateStatus;
+  promotedPlayerId: string | null;
+}
+
+export interface LeaderboardRunSummary {
+  id: string;
+  snapshotId: string;
+  heroId: number;
+  region: LeaderboardRegion;
+  status: AnalyticsRunStatus;
+  source: string;
   rowCount: number | null;
   errorCode: string | null;
   startedAt: string;

@@ -18,6 +18,7 @@ model CatalogSnapshot {
   editorialVersions EditorialBuildVersion[]
   tacticalProfiles TacticalHeroProfile[]
   analyticsRuns AnalyticsRun[]
+  leaderboardRuns LeaderboardRun[]
   patchesFrom   PatchChange[] @relation("PatchFrom")
   patchesTo     PatchChange[] @relation("PatchTo")
 }
@@ -150,6 +151,39 @@ model ReferencePlayer {
   updatedAt           DateTime @updatedAt
 
   @@index([verificationStatus, region])
+}
+
+model LeaderboardRun {
+  id          String                @id
+  snapshotId  String
+  heroId      Int
+  region      String
+  status      String
+  source      String
+  rowCount    Int?
+  errorCode   String?
+  startedAt   DateTime              @default(now())
+  completedAt DateTime?
+  snapshot    CatalogSnapshot       @relation(fields: [snapshotId], references: [id])
+  candidates  LeaderboardCandidate[]
+
+  @@index([snapshotId, heroId, region])
+  @@index([status, completedAt])
+}
+
+model LeaderboardCandidate {
+  id                  String          @id
+  runId               String
+  accountName         String?
+  possibleAccountIds  Json
+  rank                Int?
+  topHeroIds          Json
+  status              String          @default("pending")
+  promotedPlayerId    String?
+  run                 LeaderboardRun  @relation(fields: [runId], references: [id])
+
+  @@index([runId, status])
+  @@index([accountName])
 }
 
 model AnalyticsRun {
