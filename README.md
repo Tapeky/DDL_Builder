@@ -82,6 +82,8 @@ La collecte manuelle `POST /v1/admin/analytics/item-stats` enregistre une fenêt
 
 Les profils de référence sont gérés séparément par `ReferencePlayer`. Un nom Steam et `possible_account_ids` ne suffisent pas à prouver une identité : le statut `verified` doit rester une décision éditoriale et sa source doit être renseignée. Cette tranche ne déduit pas la position de farm 1–6, la lane ou le statut professionnel depuis les analytics ; ces dimensions restent à mesurer avant d’être utilisées par le moteur.
 
+La sélection initiale conserve les réponses de `/v1/leaderboard/{region}/{hero_id}` dans `LeaderboardRun` et `LeaderboardCandidate`. La source ne fournit pas de champ d’activité ; `startedAt` indique donc l’instant d’observation, tandis que le classement, les héros principaux et les `possible_account_ids` restent des indices non vérifiés. Les IDs répétés dans une même ligne sont dédupliqués, mais deux lignes partageant un pseudo ne sont jamais fusionnées. Depuis le back-office, un candidat peut être promu manuellement vers `ReferencePlayer` en statut `pending`, ou rejeté ; aucune collecte ne crée automatiquement une identité vérifiée.
+
 ## Structure
 
 ```text
@@ -91,7 +93,7 @@ apps/api/src/
   recommendations/  Calcul des achats, contexte adverse et lecture des builds
   tactical/         Tags de menaces, profils versionnés et validation éditoriale
   analytics/        Collecte manuelle et agrégats d’achats versionnés
-  references/       Profils de joueurs de référence et vérification éditoriale
+  references/       Profils de joueurs de référence, candidats leaderboard et vérification éditoriale
   admin/            API protégée du back-office éditorial
   database.module.ts
 apps/api/prisma/    Schéma PostgreSQL et migrations
@@ -106,29 +108,33 @@ Le seed de départ est dans `apps/api/src/editorial/seed-data.ts`, tandis que `a
 
 ## API
 
-| Route                                       | Fonction                                                                             |
-| ------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `GET /v1/health`                            | Vérification du service et de PostgreSQL                                             |
-| `GET /v1/catalog`                           | Héros, objets, tags tactiques et profils versionnés                                  |
-| `GET /v1/data-status`                       | Source, version, dates et fraîcheur                                                  |
-| `GET /v1/heroes?version=...`                | Héros d’une version importée                                                         |
-| `GET /v1/items?version=...&category=spirit` | Objets et filtre de catégorie                                                        |
-| `GET /v1/tactical-profiles?version=...`     | Tags disponibles et profils tactiques d’une version                                  |
-| `POST /v1/recommendations`                  | `{ "heroId": 1, "style": "balanced", "farmPriority": 1, "opponentHeroIds": [2, 6] }` |
-| `GET /v1/builds/:id`                        | Payload immuable du build partagé                                                    |
-| `GET /v1/admin/builds`                      | Liste protégée des révisions éditoriales courantes                                   |
-| `GET /v1/admin/builds/:id`                  | Détail protégé d’un build éditorial                                                  |
-| `PATCH /v1/admin/builds/:id`                | Crée une nouvelle révision brouillon                                                 |
-| `POST /v1/admin/builds/:id/publish`         | Valide les objets et publie la révision courante                                     |
-| `POST /v1/admin/builds/:id/archive`         | Archive la révision courante                                                         |
-| `GET /v1/admin/tactical-profiles`           | Liste protégée des profils tactiques et définitions de tags                          |
-| `PATCH /v1/admin/tactical-profiles/:heroId` | Révise les tags, leur intensité, leur preuve et le statut du profil                  |
-| `GET /v1/admin/analytics/runs`              | Liste les collectes statistiques protégées                                           |
-| `GET /v1/admin/analytics/runs/:id`          | Détail et lignes d’une collecte                                                      |
-| `POST /v1/admin/analytics/item-stats`       | Collecte des achats avec fenêtre et filtres explicites                               |
-| `GET /v1/admin/reference-players`           | Liste les joueurs de référence protégés                                              |
-| `POST /v1/admin/reference-players`          | Enregistre un profil de référence en attente de vérification                         |
-| `PATCH /v1/admin/reference-players/:id`     | Met à jour un profil et son statut de vérification                                   |
+| Route                                                | Fonction                                                                             |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `GET /v1/health`                                     | Vérification du service et de PostgreSQL                                             |
+| `GET /v1/catalog`                                    | Héros, objets, tags tactiques et profils versionnés                                  |
+| `GET /v1/data-status`                                | Source, version, dates et fraîcheur                                                  |
+| `GET /v1/heroes?version=...`                         | Héros d’une version importée                                                         |
+| `GET /v1/items?version=...&category=spirit`          | Objets et filtre de catégorie                                                        |
+| `GET /v1/tactical-profiles?version=...`              | Tags disponibles et profils tactiques d’une version                                  |
+| `POST /v1/recommendations`                           | `{ "heroId": 1, "style": "balanced", "farmPriority": 1, "opponentHeroIds": [2, 6] }` |
+| `GET /v1/builds/:id`                                 | Payload immuable du build partagé                                                    |
+| `GET /v1/admin/builds`                               | Liste protégée des révisions éditoriales courantes                                   |
+| `GET /v1/admin/builds/:id`                           | Détail protégé d’un build éditorial                                                  |
+| `PATCH /v1/admin/builds/:id`                         | Crée une nouvelle révision brouillon                                                 |
+| `POST /v1/admin/builds/:id/publish`                  | Valide les objets et publie la révision courante                                     |
+| `POST /v1/admin/builds/:id/archive`                  | Archive la révision courante                                                         |
+| `GET /v1/admin/tactical-profiles`                    | Liste protégée des profils tactiques et définitions de tags                          |
+| `PATCH /v1/admin/tactical-profiles/:heroId`          | Révise les tags, leur intensité, leur preuve et le statut du profil                  |
+| `GET /v1/admin/analytics/runs`                       | Liste les collectes statistiques protégées                                           |
+| `GET /v1/admin/analytics/runs/:id`                   | Détail et lignes d’une collecte                                                      |
+| `POST /v1/admin/analytics/item-stats`                | Collecte des achats avec fenêtre et filtres explicites                               |
+| `GET /v1/admin/reference-players`                    | Liste les joueurs de référence protégés                                              |
+| `POST /v1/admin/reference-players`                   | Enregistre un profil de référence en attente de vérification                         |
+| `PATCH /v1/admin/reference-players/:id`              | Met à jour un profil et son statut de vérification                                   |
+| `GET /v1/admin/leaderboards/runs`                    | Liste les runs leaderboard et leurs candidats par version, héros et région           |
+| `POST /v1/admin/leaderboards/collect`                | Collecte un leaderboard de héros et conserve les candidats bruts normalisés          |
+| `POST /v1/admin/leaderboards/candidates/:id/promote` | Promeut manuellement un candidat vers un profil `pending`                            |
+| `POST /v1/admin/leaderboards/candidates/:id/reject`  | Rejette manuellement un candidat                                                     |
 
 Les champs inconnus sont rejetés. Les IDs d’objets sont des nombres JavaScript entiers, sans conversion en entier SQL signé 32 bits. Un héros sans règles reçoit une réponse 422 plutôt qu’un build générique présenté comme personnalisé.
 

@@ -59,6 +59,18 @@ describe('NestJS API with isolated PostgreSQL schema', () => {
           },
         ]);
       }
+      if (url.pathname === '/v1/leaderboard/Europe/1') {
+        return Response.json({
+          entries: [
+            {
+              account_name: 'Leaderboard specialist',
+              possible_account_ids: [12345, 12345, 67890],
+              rank: 3,
+              top_hero_ids: [1, 1, 2],
+            },
+          ],
+        });
+      }
       expect(url.searchParams.get('client_version')).toBe(String(currentVersion));
       expect(url.searchParams.get('language')).toBe('french');
       if (url.pathname.endsWith('heroes')) {
@@ -179,6 +191,50 @@ describe('NestJS API with isolated PostgreSQL schema', () => {
       .expect(200);
     expect(verified.body.verificationStatus).toBe('verified');
     expect(verified.body.accountIds).toEqual([12345, 67890]);
+  });
+
+  it('stores leaderboard candidates and promotes them without automatic verification', async () => {
+    const collected = await request(app.getHttpServer())
+      .post('/v1/admin/leaderboards/collect')
+      .set('Authorization', 'Bearer integration-admin-token')
+      .send({ heroId: 1, region: 'Europe' })
+      .expect(201);
+    expect(collected.body.status).toBe('succeeded');
+    expect(collected.body.rowCount).toBe(1);
+
+    const runs = await request(app.getHttpServer())
+      .get('/v1/admin/leaderboards/runs')
+      .set('Authorization', 'Bearer integration-admin-token')
+      .expect(200);
+    const candidate = runs.body[0].candidates[0];
+    expect(candidate).toMatchObject({
+      accountName: 'Leaderboard specialist',
+      possibleAccountIds: [12345, 67890],
+      rank: 3,
+      topHeroIds: [1, 2],
+      status: 'pending',
+      promotedPlayerId: null,
+    });
+
+    const promoted = await request(app.getHttpServer())
+      .post(`/v1/admin/leaderboards/candidates/${candidate.id}/promote`)
+      .set('Authorization', 'Bearer integration-admin-token')
+      .send({ referenceId: 'leaderboard-specialist-eu', verificationSource: 'manual review' })
+      .expect(201);
+    expect(promoted.body.verificationStatus).toBe('pending');
+    expect(promoted.body.accountIds).toEqual([12345, 67890]);
+
+    const after = await request(app.getHttpServer())
+      .get('/v1/admin/leaderboards/runs')
+      .set('Authorization', 'Bearer integration-admin-token')
+      .expect(200);
+    expect(after.body[0].candidates[0]).toMatchObject({
+      status: 'promoted',
+      promotedPlayerId: 'leaderboard-specialist-eu',
+    });
+    expect(
+      await db.referencePlayer.findUnique({ where: { id: 'leaderboard-specialist-eu' } }),
+    ).toMatchObject({ verificationStatus: 'pending' });
   });
 
   it('exposes only validated tactical tags to the recommendation engine', async () => {

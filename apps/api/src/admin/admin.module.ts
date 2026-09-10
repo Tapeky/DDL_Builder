@@ -11,6 +11,7 @@ import {
   ReferencePlayersAdminController,
   StatisticsAdminController,
 } from './statistics-admin.controller';
+import { LeaderboardAdminController } from './leaderboard-admin.controller';
 
 @Module({
   imports: [EditorialModule, CatalogModule, TacticalModule, AnalyticsModule, ReferencesModule],
@@ -19,6 +20,7 @@ import {
     TacticalAdminController,
     StatisticsAdminController,
     ReferencePlayersAdminController,
+    LeaderboardAdminController,
   ],
   providers: [AdminGuard],
 })
