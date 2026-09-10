@@ -28,6 +28,7 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql://deadlock@127.0.0.1:5432/deadlock
+      ADMIN_TOKEN: ci-admin-token
       NEXT_TELEMETRY_DISABLED: '1'
     steps:
       - uses: actions/checkout@v4

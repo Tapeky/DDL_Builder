@@ -2,12 +2,15 @@ import { Injectable, NotFoundException, ServiceUnavailableException } from '@nes
 import { createHash } from 'node:crypto';
 import type { Catalog, DataStatus, Hero, Item } from '@deadlock/contracts';
 import { DatabaseService } from '../database.module';
-import { canRecommend } from '../recommendations/engine';
+import { EditorialBuildService } from '../editorial/editorial.service';
 import { fetchSource, latestVersion, normalizeCatalog, SOURCE_URL } from './source';
 
 @Injectable()
 export class CatalogService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly editorial: EditorialBuildService,
+  ) {}
 
   async status(): Promise<DataStatus> {
     const head = await this.db.catalogHead.findUnique({
@@ -25,7 +28,9 @@ export class CatalogService {
         itemCount: 0,
         notice: 'Aucune donnée importée. Lancez la synchronisation du catalogue côté serveur.',
       };
+    await this.editorial.ensureSnapshot(head.snapshot.id);
     const stale = Date.now() - head.checkedAt.getTime() > 24 * 60 * 60 * 1000;
+    const counts = await this.editorial.statusCounts(head.snapshot.id);
     return {
       state: stale ? 'stale' : 'ready',
       version: head.snapshot.id,
@@ -34,9 +39,12 @@ export class CatalogService {
       source: SOURCE_URL,
       heroCount: (head.snapshot.heroes as unknown as Hero[]).length,
       itemCount: (head.snapshot.items as unknown as Item[]).length,
+      ...counts,
       notice: stale
         ? 'La source n’a pas été vérifiée depuis plus de 24 heures. Les dernières données importées restent disponibles.'
-        : 'Données communautaires versionnées. La version du client ne constitue pas une validation des builds après un patch.',
+        : counts.staleBuildCount > 0
+          ? `${counts.staleBuildCount} build(s) doivent être revalidés après un changement de version du client.`
+          : 'Données communautaires versionnées. La version du client ne constitue pas une validation des builds après un patch.',
     };
   }
 
@@ -53,11 +61,11 @@ export class CatalogService {
       if (version) throw new NotFoundException('Version du catalogue introuvable.');
       throw new ServiceUnavailableException('Le catalogue n’a pas encore été importé.');
     }
+    await this.editorial.ensureSnapshot(snapshot.id);
     const items = snapshot.items as unknown as Item[];
-    const heroes = (snapshot.heroes as unknown as Hero[]).map((hero) => ({
-      ...hero,
-      hasBuild: canRecommend(hero.id, items),
-    }));
+    const rawHeroes = snapshot.heroes as unknown as Hero[];
+    const buildStatuses = await this.editorial.heroStatuses(snapshot.id, rawHeroes);
+    const heroes = rawHeroes.map((hero) => ({ ...hero, ...buildStatuses.get(hero.id) }));
     return { ...snapshot, heroes, items };
   }
 
@@ -88,6 +96,7 @@ export class CatalogService {
         });
         if (current && current.snapshot.clientVersion > clientVersion)
           throw new Error('SOURCE_VERSION_REGRESSION');
+        const sameSnapshot = current?.snapshotId === id;
         await tx.catalogSnapshot.upsert({
           where: { id },
           update: {},
@@ -98,6 +107,17 @@ export class CatalogService {
             items: JSON.parse(JSON.stringify(catalog.items)),
           },
         });
+        const next = await tx.catalogSnapshot.findUniqueOrThrow({ where: { id } });
+        const editorialVersionCount = await tx.editorialBuildVersion.count({
+          where: { snapshotId: id },
+        });
+        if (!sameSnapshot || editorialVersionCount === 0) {
+          await this.editorial.reconcileSnapshot(
+            tx,
+            sameSnapshot ? null : (current?.snapshot ?? null),
+            next,
+          );
+        }
         if (!current || current.checkedAt <= run.startedAt) {
           await tx.catalogHead.upsert({
             where: { id: 'current' },

@@ -4,7 +4,7 @@ Un premier site en français pour explorer le catalogue de Deadlock et préparer
 
 **Ce n’est pas encore un moteur statistique ni un produit prêt pour une exploitation publique.** Les builds sont des brouillons expérimentaux non validés par des joueurs experts. Aucun taux de victoire n’est affiché ou inventé.
 
-## Fonctionnalités de cette première version
+## Fonctionnalités de cette version
 
 - Import réel des héros jouables et des objets de boutique standards, en français, depuis Deadlock API.
 - Version du client fixée avant les deux téléchargements, validation des données externes et publication atomique d’un catalogue immuable.
@@ -14,6 +14,7 @@ Un premier site en français pour explorer le catalogue de Deadlock et préparer
 - Catalogue filtrable par catégorie et nom, descriptions et composants consultables.
 - Builds sauvegardés et partageables par URL : un nouvel import ne réécrit pas les anciens liens.
 - Signalement explicite des données absentes ou non vérifiées depuis 24 heures ; un import échoué ne détruit pas le dernier catalogue valide.
+- Builds éditoriaux versionnés dans PostgreSQL, back-office protégé et revalidation automatique après changement de catalogue.
 
 Les objets spéciaux de niveau 5 sont exclus. Les versions importées sont des **versions du client**, pas des dates de patch vérifiées. La fraîcheur du catalogue ne vaut pas validation des builds pour la méta actuelle.
 
@@ -26,6 +27,8 @@ cp .env.example .env
 ```
 
 Remplacer le mot de passe local dans `POSTGRES_PASSWORD` et dans `DATABASE_URL` par la même valeur. Utiliser une valeur URL-encodée dans l’URL si elle contient des caractères réservés. Ne jamais committer `.env`.
+
+Pour ouvrir le back-office local, ajouter aussi un `ADMIN_TOKEN` long et aléatoire dans `.env`. Cette valeur ne doit jamais être placée dans le frontend, le dépôt ou une capture d’écran.
 
 ```bash
 pnpm install
@@ -61,6 +64,16 @@ L’import choisit la version maximale annoncée par `/v1/assets/client-versions
 
 Les erreurs et horaires des imports sont enregistrés dans `SyncRun`. Aucun endpoint HTTP public ne permet de déclencher une synchronisation. Les réponses 429 et 5xx font l’objet de tentatives espacées et bornées, avec prise en compte de `Retry-After`. Les erreurs réseau ou de validation font échouer l’import sans publication partielle.
 
+## Workflow éditorial
+
+La phase éditoriale ajoute les modèles `EditorialBuild`, `EditorialBuildVersion`, `EditorialBuildStep` et `PatchChange`. Les règles initiales servent uniquement à amorcer les 15 builds lors du premier import ; les recommandations publiques lisent ensuite PostgreSQL. Une révision créée depuis le back-office devient un brouillon et ne remplace jamais la révision partagée précédente.
+
+Le back-office est accessible sur `/admin` et protégé par un jeton Bearer. Il permet de lister les builds, modifier le titre, le résumé, les phases, les objets et les raisons, ajouter ou supprimer des achats, créer une copie pour un autre héros/style, publier ou archiver une révision. L’API correspondante est sous `/v1/admin/builds` et refuse les requêtes sans `Authorization: Bearer ...`.
+
+Lorsqu’une nouvelle version du client est importée, le service compare les héros et les champs qui affectent les achats : nom, catégorie, niveau, prix et composants. Les versions non touchées sont recopiées vers le nouveau snapshot ; les builds qui référencent un héros ou un objet modifié deviennent `stale` et disparaissent des recommandations publiées jusqu’à leur relecture. Le détail de la transition est conservé dans `PatchChange`. Les builds partagés précédents restent lisibles parce que leur payload est immuable.
+
+Après avoir déployé cette migration sur une base qui contenait déjà le catalogue de la première version, exécuter `pnpm data:sync` une fois pour amorcer les versions éditoriales. La commande est idempotente et détecte aussi un snapshot existant sans builds.
+
 Cette livraison fournit une **commande manuelle**, pas encore un ordonnanceur. Une tâche planifiée exécutant `node apps/api/dist/sync.js` pourra l’appeler après compilation. Redis/BullMQ reste différé tant qu’il n’y a pas de traitement analytique ou de file de travaux à gérer.
 
 ## Structure
@@ -68,7 +81,9 @@ Cette livraison fournit une **commande manuelle**, pas encore un ordonnanceur. U
 ```text
 apps/api/src/
   catalog/          Adaptateur externe, normalisation, import et lecture des snapshots
-  recommendations/  Règles éditoriales, achats, sauvegarde et lecture des builds
+  editorial/        Builds versionnés, seed initial et workflow de patch
+  recommendations/  Calcul des achats, sauvegarde et lecture des builds
+  admin/            API protégée du back-office éditorial
   database.module.ts
 apps/api/prisma/    Schéma PostgreSQL et migrations
 apps/web/          Application Next.js responsive
@@ -76,9 +91,9 @@ packages/contracts/ Types des réponses et requêtes consommés par le frontend
 tests/             Parcours Playwright sur l’API et le frontend réels
 ```
 
-Le modèle initial stocke le catalogue normalisé en JSONB dans `CatalogSnapshot`, avec un pointeur `CatalogHead`, des `SavedBuild` immuables et des `SyncRun`. Il évite de créer prématurément un entrepôt de matchs. Les types partagés sont écrits à la main pour cette première tranche ; le client généré depuis OpenAPI reste à faire.
+Le catalogue normalisé est stocké en JSONB dans `CatalogSnapshot`, avec un pointeur `CatalogHead`, des `SavedBuild` immuables et des `SyncRun`. Les builds éditoriaux et leurs achats sont relationnels pour rester éditables, audités et versionnés. Le projet évite encore de créer prématurément un entrepôt de matchs. Les types partagés sont écrits à la main pour cette tranche ; le client généré depuis OpenAPI reste à faire.
 
-Les règles de départ sont dans `apps/api/src/recommendations/engine.ts`. Toute évolution métier doit incrémenter `ENGINE_VERSION` et ajouter des tests. Les anciens builds sauvegardés conservent leur payload, même après modification du moteur.
+Le seed de départ est dans `apps/api/src/editorial/seed-data.ts`, tandis que `apps/api/src/recommendations/engine.ts` ne contient que la validation et le calcul générique des achats. Toute évolution métier doit incrémenter `ENGINE_VERSION` et ajouter des tests. Les anciens builds sauvegardés conservent leur payload, même après modification du moteur.
 
 ## API
 
@@ -91,6 +106,11 @@ Les règles de départ sont dans `apps/api/src/recommendations/engine.ts`. Toute
 | `GET /v1/items?version=...&category=spirit` | Objets et filtre de catégorie                                                  |
 | `POST /v1/recommendations`                  | `{ "heroId": 1, "style": "balanced", "version": "..." }` ; version facultative |
 | `GET /v1/builds/:id`                        | Payload immuable du build partagé                                              |
+| `GET /v1/admin/builds`                      | Liste protégée des révisions éditoriales courantes                             |
+| `GET /v1/admin/builds/:id`                  | Détail protégé d’un build éditorial                                            |
+| `PATCH /v1/admin/builds/:id`                | Crée une nouvelle révision brouillon                                           |
+| `POST /v1/admin/builds/:id/publish`         | Valide les objets et publie la révision courante                               |
+| `POST /v1/admin/builds/:id/archive`         | Archive la révision courante                                                   |
 
 Les champs inconnus sont rejetés. Les IDs d’objets sont des nombres JavaScript entiers, sans conversion en entier SQL signé 32 bits. Un héros sans règles reçoit une réponse 422 plutôt qu’un build générique présenté comme personnalisé.
 
@@ -115,7 +135,7 @@ GitHub Actions utilise une base éphémère avec des fixtures explicitement synt
 ## Limites et suite du projet
 
 1. Faire relire les quinze variantes par des joueurs expérimentés avant de les présenter comme des recommandations validées.
-2. Ajouter une administration authentifiée, une validation éditoriale par patch et un suivi détaillé des changements d’objets.
+2. Faire relire les versions marquées `stale` après chaque nouveau client et documenter les décisions éditoriales.
 3. Ajouter statistiques, échantillons et intervalles de confiance après validation de la couverture réelle de la source.
 4. Étendre le contexte aux adversaires, à l’inventaire, au budget disponible et aux règles d’emplacements ; le moteur actuel génère uniquement un parcours complet de départ.
 5. Ajouter favoris, comptes et éditeur personnel seulement après validation de ce premier parcours.

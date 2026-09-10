@@ -142,7 +142,12 @@ export default function Home() {
     try {
       const data = await request<Catalog>('/catalog');
       setCatalog(data);
-      setHeroId(data.heroes.find((hero) => hero.hasBuild)?.id ?? data.heroes[0]?.id ?? null);
+      setHeroId(
+        data.heroes.find((hero) => hero.hasBuild)?.id ??
+          data.heroes.find((hero) => hero.buildStatus === 'stale')?.id ??
+          data.heroes[0]?.id ??
+          null,
+      );
       const id = new URLSearchParams(window.location.search).get('build');
       if (id) await loadSaved(id);
     } catch (error) {
@@ -157,7 +162,8 @@ export default function Home() {
   }, [loadCatalog]);
 
   const selectedHero = catalog?.heroes.find((hero) => hero.id === heroId);
-  const supportedHeroes = catalog?.heroes.filter((hero) => hero.hasBuild) ?? [];
+  const supportedHeroes =
+    catalog?.heroes.filter((hero) => hero.buildStatus && hero.buildStatus !== 'none') ?? [];
   const visibleHeroes = (
     showAllHeroes || heroSearch ? (catalog?.heroes ?? []) : supportedHeroes
   ).filter((hero) => hero.name.toLowerCase().includes(heroSearch.toLowerCase()));
@@ -387,7 +393,13 @@ export default function Home() {
                     <span className="hero-card-shade" />
                     <span className="hero-card-label">
                       <strong>{hero.name}</strong>
-                      <small>{hero.hasBuild ? 'BUILD DISPONIBLE' : 'EXPLORER LE HÉROS'}</small>
+                      <small>
+                        {hero.hasBuild
+                          ? 'BUILD DISPONIBLE'
+                          : hero.buildStatus === 'stale'
+                            ? 'À REVALIDER'
+                            : 'EXPLORER LE HÉROS'}
+                      </small>
                     </span>
                     <span className="hero-selection">
                       {heroId === hero.id ? <Check size={14} /> : <ArrowUpRight size={14} />}
@@ -399,8 +411,10 @@ export default function Home() {
                 <p className="empty">Aucun héros ne correspond à votre recherche.</p>
               )}
               <p className="section-footnote">
-                <span className="status-dot ready" /> {supportedHeroes.length} héros accompagnés
-                d’un plan de jeu éditorial. Les autres restent à explorer.
+                <span className="status-dot ready" />{' '}
+                {supportedHeroes.filter((hero) => hero.hasBuild).length} héros publiés ·{' '}
+                {supportedHeroes.filter((hero) => hero.buildStatus === 'stale').length} à revalider.
+                Les autres restent à explorer.
               </p>
             </section>
 
@@ -425,7 +439,9 @@ export default function Home() {
                         <p>{selectedHero.description}</p>
                         {!selectedHero.hasBuild && (
                           <span className="unsupported">
-                            À découvrir · aucun build éditorial disponible
+                            {selectedHero.buildStatus === 'stale'
+                              ? 'Build à revalider après la version du client'
+                              : 'À découvrir · aucun build éditorial disponible'}
                           </span>
                         )}
                       </div>
@@ -543,6 +559,14 @@ export default function Home() {
                                 <strong className="cost">◈ {money(step.purchaseCost)}</strong>
                               </div>
                               <p>{step.reason}</p>
+                              {(step.alternatives ?? []).length > 0 && (
+                                <p className="alternatives">
+                                  Alternatives :{' '}
+                                  {(step.alternatives ?? [])
+                                    .map((alternative) => alternative.name)
+                                    .join(', ')}
+                                </p>
+                              )}
                             </div>
                           ))}
                       </div>

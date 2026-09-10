@@ -15,6 +15,9 @@ model CatalogSnapshot {
   importedAt    DateTime @default(now())
   head          CatalogHead?
   builds        SavedBuild[]
+  editorialVersions EditorialBuildVersion[]
+  patchesFrom   PatchChange[] @relation("PatchFrom")
+  patchesTo     PatchChange[] @relation("PatchTo")
 }
 
 model CatalogHead {
@@ -30,6 +33,79 @@ model SavedBuild {
   snapshot   CatalogSnapshot @relation(fields: [snapshotId], references: [id])
   payload    Json
   createdAt  DateTime        @default(now())
+}
+
+model EditorialBuild {
+  id         String                  @id
+  heroId     Int
+  style      String
+  createdAt  DateTime                @default(now())
+  updatedAt  DateTime                @updatedAt
+  versions   EditorialBuildVersion[]
+
+  @@unique([heroId, style])
+  @@index([heroId])
+}
+
+model EditorialBuildVersion {
+  id           String                  @id
+  buildId      String
+  snapshotId   String
+  revision     Int
+  title        String
+  summary      String
+  status       String
+  isCurrent    Boolean                 @default(true)
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+  reviewedAt   DateTime?
+  build        EditorialBuild          @relation(fields: [buildId], references: [id])
+  snapshot     CatalogSnapshot         @relation(fields: [snapshotId], references: [id])
+  steps        EditorialBuildStep[]
+
+  @@unique([buildId, snapshotId, revision])
+  @@index([buildId, snapshotId, isCurrent])
+  @@index([snapshotId, status])
+}
+
+model EditorialBuildStep {
+  id          String                           @id
+  versionId   String
+  order       Int
+  phase       String
+  itemClassName String
+  reason      String
+  version     EditorialBuildVersion           @relation(fields: [versionId], references: [id])
+  alternatives EditorialBuildStepAlternative[]
+
+  @@unique([versionId, order])
+}
+
+model EditorialBuildStepAlternative {
+  id          String             @id
+  stepId      String
+  itemClassName String
+  reason      String?
+  step        EditorialBuildStep @relation(fields: [stepId], references: [id])
+
+  @@unique([stepId, itemClassName])
+}
+
+model PatchChange {
+  id              String          @id
+  fromSnapshotId  String?
+  toSnapshotId    String
+  fromClientVersion Int?
+  toClientVersion Int
+  changedHeroes   Json
+  changedItems    Json
+  staleBuilds     Json
+  createdAt       DateTime        @default(now())
+  fromSnapshot    CatalogSnapshot? @relation("PatchFrom", fields: [fromSnapshotId], references: [id])
+  toSnapshot      CatalogSnapshot  @relation("PatchTo", fields: [toSnapshotId], references: [id])
+
+  @@index([toSnapshotId])
+  @@index([createdAt])
 }
 
 model SyncRun {
