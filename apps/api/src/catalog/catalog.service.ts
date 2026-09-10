@@ -4,12 +4,14 @@ import type { Catalog, DataStatus, Hero, Item } from '@deadlock/contracts';
 import { DatabaseService } from '../database.module';
 import { EditorialBuildService } from '../editorial/editorial.service';
 import { fetchSource, latestVersion, normalizeCatalog, SOURCE_URL } from './source';
+import { TacticalService } from '../tactical/tactical.service';
 
 @Injectable()
 export class CatalogService {
   constructor(
     private readonly db: DatabaseService,
     private readonly editorial: EditorialBuildService,
+    private readonly tactical: TacticalService,
   ) {}
 
   async status(): Promise<DataStatus> {
@@ -29,6 +31,7 @@ export class CatalogService {
         notice: 'Aucune donnée importée. Lancez la synchronisation du catalogue côté serveur.',
       };
     await this.editorial.ensureSnapshot(head.snapshot.id);
+    await this.tactical.ensureSnapshot(head.snapshot.id);
     const stale = Date.now() - head.checkedAt.getTime() > 24 * 60 * 60 * 1000;
     const counts = await this.editorial.statusCounts(head.snapshot.id);
     return {
@@ -62,18 +65,33 @@ export class CatalogService {
       throw new ServiceUnavailableException('Le catalogue n’a pas encore été importé.');
     }
     await this.editorial.ensureSnapshot(snapshot.id);
+    await this.tactical.ensureSnapshot(snapshot.id);
     const items = snapshot.items as unknown as Item[];
     const rawHeroes = snapshot.heroes as unknown as Hero[];
     const buildStatuses = await this.editorial.heroStatuses(snapshot.id, rawHeroes);
     const heroes = rawHeroes.map((hero) => ({ ...hero, ...buildStatuses.get(hero.id) }));
-    return { ...snapshot, heroes, items };
+    const tacticalProfiles = await this.tactical.listForSnapshot(snapshot.id);
+    return {
+      ...snapshot,
+      heroes,
+      items,
+      tacticalTags: this.tactical.definitions(),
+      tacticalProfiles,
+    };
   }
 
   async catalog(): Promise<Catalog> {
     const status = await this.status();
-    if (!status.version) return { heroes: [], items: [], status };
-    const { heroes, items } = await this.snapshot(status.version);
-    return { heroes, items, status };
+    if (!status.version)
+      return {
+        heroes: [],
+        items: [],
+        status,
+        tacticalTags: this.tactical.definitions(),
+        tacticalProfiles: [],
+      };
+    const { heroes, items, tacticalTags, tacticalProfiles } = await this.snapshot(status.version);
+    return { heroes, items, status, tacticalTags, tacticalProfiles };
   }
 
   async sync() {
@@ -111,11 +129,21 @@ export class CatalogService {
         const editorialVersionCount = await tx.editorialBuildVersion.count({
           where: { snapshotId: id },
         });
+        let changedHeroes: number[] = [];
         if (!sameSnapshot || editorialVersionCount === 0) {
-          await this.editorial.reconcileSnapshot(
+          const editorialChange = await this.editorial.reconcileSnapshot(
             tx,
             sameSnapshot ? null : (current?.snapshot ?? null),
             next,
+          );
+          changedHeroes = editorialChange.changedHeroes;
+        }
+        if (!sameSnapshot) {
+          await this.tactical.reconcileSnapshot(
+            tx,
+            current?.snapshot ?? null,
+            next,
+            new Set(changedHeroes),
           );
         }
         if (!current || current.checkedAt <= run.startedAt) {

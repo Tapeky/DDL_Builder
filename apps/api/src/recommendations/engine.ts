@@ -1,5 +1,13 @@
 import { BadRequestException, UnprocessableEntityException } from '@nestjs/common';
-import type { BuildStep, Hero, Item, Phase, Recommendation, Style } from '@deadlock/contracts';
+import type {
+  BuildStep,
+  FarmPriority,
+  Hero,
+  Item,
+  Phase,
+  Recommendation,
+  Style,
+} from '@deadlock/contracts';
 import type { EditorialProfile, EditorialStepInput } from '../editorial/types';
 
 export const ENGINE_VERSION = 'editorial-0.2.0';
@@ -39,6 +47,26 @@ export function validateEditorialProfile(profile: EditorialProfile, items: Item[
         throw new UnprocessableEntityException('Un achat ne peut pas être sa propre alternative.');
       }
     }
+  }
+  const investmentKeys = new Set<string>();
+  for (const investment of profile.investments ?? []) {
+    if (!['weapon', 'vitality', 'spirit'].includes(investment.branch)) {
+      throw new UnprocessableEntityException('La branche d’investissement est inconnue.');
+    }
+    if (!['early', 'core', 'late'].includes(investment.phase)) {
+      throw new UnprocessableEntityException('La phase d’investissement est inconnue.');
+    }
+    if (!['required', 'preferred'].includes(investment.priority) || investment.threshold <= 0) {
+      throw new UnprocessableEntityException('Le palier d’investissement est invalide.');
+    }
+    if (!investment.reason.trim()) {
+      throw new UnprocessableEntityException('Chaque palier d’investissement doit être justifié.');
+    }
+    const key = `${investment.branch}:${investment.phase}:${investment.threshold}`;
+    if (investmentKeys.has(key)) {
+      throw new UnprocessableEntityException('Les paliers d’investissement doivent être uniques.');
+    }
+    investmentKeys.add(key);
   }
 }
 
@@ -94,7 +122,18 @@ export function recommend(
   items: Item[],
 ): Pick<
   Recommendation,
-  'title' | 'summary' | 'steps' | 'totalCost' | 'warnings' | 'evidence' | 'engineVersion'
+  | 'title'
+  | 'summary'
+  | 'steps'
+  | 'totalCost'
+  | 'investments'
+  | 'warnings'
+  | 'evidence'
+  | 'engineVersion'
+  | 'farmPriority'
+  | 'opponents'
+  | 'threats'
+  | 'adaptations'
 > {
   if (hero.id !== profile.heroId) {
     throw new UnprocessableEntityException('Le build ne correspond pas au héros demandé.');
@@ -106,11 +145,16 @@ export function recommend(
     summary: profile.summary,
     steps,
     totalCost: steps.reduce((sum, step) => sum + step.purchaseCost, 0),
+    investments: profile.investments ?? [],
     engineVersion: ENGINE_VERSION,
     evidence: 'editorial-draft',
+    farmPriority: 3 as FarmPriority,
+    opponents: [],
+    threats: [],
+    adaptations: [],
     warnings: [
       'Build expérimental : règles de départ non validées par des joueurs experts et sans statistiques de victoire.',
-      'Ce parcours ne tient pas compte des adversaires, de votre inventaire actuel ni de votre budget disponible.',
+      'Ce parcours ne tient pas compte de votre inventaire actuel ni de votre budget disponible.',
       'Les coûts déduisent les composants achetés dans ce parcours. Les ventes, capacités à imprégner et objets spéciaux de niveau 5 ne sont pas pris en charge.',
     ],
   };

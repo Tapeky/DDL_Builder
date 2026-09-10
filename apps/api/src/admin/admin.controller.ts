@@ -13,7 +13,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import type { EditorialBuildStatus, Phase, Style } from '@deadlock/contracts';
+import type { Category, EditorialBuildStatus, Phase, Style } from '@deadlock/contracts';
 import { AdminGuard } from './admin.guard';
 import { EditorialBuildService } from '../editorial/editorial.service';
 
@@ -60,6 +60,31 @@ class StepDto {
   alternatives?: AlternativeDto[];
 }
 
+class InvestmentDto {
+  @ApiProperty({ enum: ['weapon', 'vitality', 'spirit'] })
+  @IsIn(['weapon', 'vitality', 'spirit'])
+  branch!: Category;
+
+  @ApiProperty({ enum: ['early', 'core', 'late'] })
+  @IsIn(['early', 'core', 'late'])
+  phase!: Phase;
+
+  @ApiProperty({ minimum: 1, maximum: 100_000 })
+  @IsInt()
+  @Min(1)
+  @Max(100_000)
+  threshold!: number;
+
+  @ApiProperty({ enum: ['required', 'preferred'] })
+  @IsIn(['required', 'preferred'])
+  priority!: 'required' | 'preferred';
+
+  @ApiProperty()
+  @IsString()
+  @MaxLength(500)
+  reason!: string;
+}
+
 class CreateBuildDto {
   @ApiProperty()
   @IsInt()
@@ -93,6 +118,14 @@ class CreateBuildDto {
   @Type(() => StepDto)
   steps!: StepDto[];
 
+  @ApiPropertyOptional({ type: [InvestmentDto] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(18)
+  @ValidateNested({ each: true })
+  @Type(() => InvestmentDto)
+  investments?: InvestmentDto[];
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -120,6 +153,14 @@ class UpdateBuildDto {
   @ValidateNested({ each: true })
   @Type(() => StepDto)
   steps?: StepDto[];
+
+  @ApiPropertyOptional({ type: [InvestmentDto] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(18)
+  @ValidateNested({ each: true })
+  @Type(() => InvestmentDto)
+  investments?: InvestmentDto[];
 }
 
 class BuildQueryDto {

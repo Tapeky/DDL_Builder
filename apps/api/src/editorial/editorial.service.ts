@@ -12,6 +12,7 @@ import { purchaseSteps, recommend, validateEditorialProfile } from '../recommend
 import { seedProfiles } from './seed-data';
 import type {
   EditorialAlternativeInput,
+  EditorialInvestmentInput,
   EditorialProfile,
   EditorialProfileInput,
   EditorialStepInput,
@@ -45,12 +46,15 @@ type RecommendationSnapshot = {
   items: Item[];
 };
 type VersionRecord = Prisma.EditorialBuildVersionGetPayload<{
-  include: { build: true; steps: { include: { alternatives: true } } };
+  include: { build: true; steps: { include: { alternatives: true } }; investments: true };
 }>;
 
 const versionInclude = {
   build: true,
   steps: { include: { alternatives: true }, orderBy: { order: 'asc' as const } },
+  investments: {
+    orderBy: [{ branch: 'asc' as const }, { phase: 'asc' as const }, { threshold: 'asc' as const }],
+  },
 };
 
 function status(value: string): EditorialBuildStatus {
@@ -129,6 +133,13 @@ function inputFromVersion(version: VersionRecord): EditorialProfile {
         ...(alternative.reason ? { reason: alternative.reason } : {}),
       })),
     })),
+    investments: version.investments.map((investment): EditorialInvestmentInput => ({
+      branch: investment.branch as EditorialInvestmentInput['branch'],
+      phase: investment.phase as EditorialInvestmentInput['phase'],
+      threshold: investment.threshold,
+      priority: investment.priority as 'required' | 'preferred',
+      reason: investment.reason,
+    })),
   };
 }
 
@@ -146,6 +157,17 @@ function profileSteps(profile: EditorialProfileInput) {
         reason: alternative.reason ?? null,
       })),
     },
+  }));
+}
+
+function profileInvestments(profile: EditorialProfileInput) {
+  return (profile.investments ?? []).map((investment) => ({
+    id: randomUUID(),
+    branch: investment.branch,
+    phase: investment.phase,
+    threshold: investment.threshold,
+    priority: investment.priority,
+    reason: investment.reason,
   }));
 }
 
@@ -338,6 +360,7 @@ export class EditorialBuildService {
             summary: input.summary,
             status: profile.status,
             steps: { create: profileSteps(profile) },
+            investments: { create: profileInvestments(profile) },
           },
         },
       },
@@ -367,6 +390,7 @@ export class EditorialBuildService {
       summary: input.summary ?? current.summary,
       status: 'draft',
       steps: input.steps ?? current.steps,
+      investments: input.investments ?? current.investments,
     };
     validateProfileAndCosts(profile, itemsFrom(snapshot));
     return this.db.$transaction(async (tx) => {
@@ -385,6 +409,7 @@ export class EditorialBuildService {
           summary: profile.summary,
           status: 'draft',
           steps: { create: profileSteps(profile) },
+          investments: { create: profileInvestments(profile) },
         },
         include: versionInclude,
       });
@@ -532,6 +557,7 @@ export class EditorialBuildService {
               summary: profile.summary,
               status: 'published',
               steps: { create: profileSteps(profile) },
+              investments: { create: profileInvestments(profile) },
             },
           },
         },
@@ -547,6 +573,7 @@ export class EditorialBuildService {
             summary: profile.summary,
             status: 'published',
             steps: { create: profileSteps(profile) },
+            investments: { create: profileInvestments(profile) },
           },
         });
       }

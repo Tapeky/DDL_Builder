@@ -41,4 +41,14 @@ export class CatalogController {
     const { items } = await this.catalogService.snapshot(query.version);
     return query.category ? items.filter((item) => item.category === query.category) : items;
   }
+
+  @Get('tactical-profiles')
+  async tacticalProfiles(@Query() query: CatalogQuery) {
+    const snapshot = await this.catalogService.snapshot(query.version);
+    return {
+      version: snapshot.id,
+      tags: snapshot.tacticalTags,
+      profiles: snapshot.tacticalProfiles,
+    };
+  }
 }

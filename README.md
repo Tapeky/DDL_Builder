@@ -67,7 +67,7 @@ Les erreurs et horaires des imports sont enregistrés dans `SyncRun`. Aucun endp
 
 La phase éditoriale ajoute les modèles `EditorialBuild`, `EditorialBuildVersion`, `EditorialBuildStep` et `PatchChange`. Les règles initiales servent uniquement à amorcer les 15 builds lors du premier import ; les recommandations publiques lisent ensuite PostgreSQL. Une révision créée depuis le back-office devient un brouillon et ne remplace jamais la révision partagée précédente.
 
-Le back-office est accessible sur `/admin` et protégé par un jeton Bearer. Il permet de lister les builds, modifier le titre, le résumé, les phases, les objets et les raisons, ajouter ou supprimer des achats, créer une copie pour un autre héros/style, publier ou archiver une révision. L’API correspondante est sous `/v1/admin/builds` et refuse les requêtes sans `Authorization: Bearer ...`.
+Le back-office est accessible sur `/admin` et protégé par un jeton Bearer. Il permet de lister les builds, modifier le titre, le résumé, les phases, les objets, les raisons et les paliers d’investissement, ajouter ou supprimer des achats, créer une copie pour un autre héros/style, publier ou archiver une révision. Il permet aussi d’éditer les profils tactiques héros par héros ; un profil en brouillon ou obsolète ne déclenche aucune adaptation publique. Les API correspondantes sont sous `/v1/admin/builds` et `/v1/admin/tactical-profiles` et refusent les requêtes sans `Authorization: Bearer ...`.
 
 Lorsqu’une nouvelle version du client est importée, le service compare les héros et les champs qui affectent les achats : nom, catégorie, niveau, prix et composants. Les versions non touchées sont recopiées vers le nouveau snapshot ; les builds qui référencent un héros ou un objet modifié deviennent `stale` et disparaissent des recommandations publiées jusqu’à leur relecture. Le détail de la transition est conservé dans `PatchChange`. Les builds partagés précédents restent lisibles parce que leur payload est immuable.
 
@@ -81,7 +81,8 @@ Cette livraison fournit une **commande manuelle**, pas encore un ordonnanceur. U
 apps/api/src/
   catalog/          Adaptateur externe, normalisation, import et lecture des snapshots
   editorial/        Builds versionnés, seed initial et workflow de patch
-  recommendations/  Calcul des achats, sauvegarde et lecture des builds
+  recommendations/  Calcul des achats, contexte adverse et lecture des builds
+  tactical/         Tags de menaces, profils versionnés et validation éditoriale
   admin/            API protégée du back-office éditorial
   database.module.ts
 apps/api/prisma/    Schéma PostgreSQL et migrations
@@ -90,7 +91,7 @@ packages/contracts/ Types des réponses et requêtes consommés par le frontend
 tests/             Parcours Playwright sur l’API et le frontend réels
 ```
 
-Le catalogue normalisé est stocké en JSONB dans `CatalogSnapshot`, avec un pointeur `CatalogHead`, des `SavedBuild` immuables et des `SyncRun`. Les builds éditoriaux et leurs achats sont relationnels pour rester éditables, audités et versionnés. Le projet évite encore de créer prématurément un entrepôt de matchs. Les types partagés sont écrits à la main pour cette tranche ; le client généré depuis OpenAPI reste à faire.
+Le catalogue normalisé est stocké en JSONB dans `CatalogSnapshot`, avec un pointeur `CatalogHead`, des `SavedBuild` immuables et des `SyncRun`. Les builds éditoriaux, leurs achats et leurs paliers d’investissement sont relationnels pour rester éditables, audités et versionnés. Les profils tactiques sont recopiés à chaque snapshot ; les profils des héros dont les données changent passent automatiquement à `stale`. Le projet évite encore de créer prématurément un entrepôt de matchs. Les types partagés sont écrits à la main pour cette tranche ; le client généré depuis OpenAPI reste à faire.
 
 Le seed de départ est dans `apps/api/src/editorial/seed-data.ts`, tandis que `apps/api/src/recommendations/engine.ts` ne contient que la validation et le calcul générique des achats. Toute évolution métier doit incrémenter `ENGINE_VERSION` et ajouter des tests. Les anciens builds sauvegardés conservent leur payload, même après modification du moteur.
 
@@ -99,17 +100,20 @@ Le seed de départ est dans `apps/api/src/editorial/seed-data.ts`, tandis que `a
 | Route                                       | Fonction                                                                       |
 | ------------------------------------------- | ------------------------------------------------------------------------------ |
 | `GET /v1/health`                            | Vérification du service et de PostgreSQL                                       |
-| `GET /v1/catalog`                           | Héros, objets et état du catalogue courant                                     |
+| `GET /v1/catalog`                           | Héros, objets, tags tactiques et profils versionnés                            |
 | `GET /v1/data-status`                       | Source, version, dates et fraîcheur                                            |
 | `GET /v1/heroes?version=...`                | Héros d’une version importée                                                   |
 | `GET /v1/items?version=...&category=spirit` | Objets et filtre de catégorie                                                  |
-| `POST /v1/recommendations`                  | `{ "heroId": 1, "style": "balanced", "version": "..." }` ; version facultative |
+| `GET /v1/tactical-profiles?version=...`     | Tags disponibles et profils tactiques d’une version                            |
+| `POST /v1/recommendations`                  | `{ "heroId": 1, "style": "balanced", "farmPriority": 1, "opponentHeroIds": [2, 6] }` |
 | `GET /v1/builds/:id`                        | Payload immuable du build partagé                                              |
 | `GET /v1/admin/builds`                      | Liste protégée des révisions éditoriales courantes                             |
 | `GET /v1/admin/builds/:id`                  | Détail protégé d’un build éditorial                                            |
 | `PATCH /v1/admin/builds/:id`                | Crée une nouvelle révision brouillon                                           |
 | `POST /v1/admin/builds/:id/publish`         | Valide les objets et publie la révision courante                               |
 | `POST /v1/admin/builds/:id/archive`         | Archive la révision courante                                                   |
+| `GET /v1/admin/tactical-profiles`           | Liste protégée des profils tactiques et définitions de tags                    |
+| `PATCH /v1/admin/tactical-profiles/:heroId` | Révise les tags, leur intensité, leur preuve et le statut du profil             |
 
 Les champs inconnus sont rejetés. Les IDs d’objets sont des nombres JavaScript entiers, sans conversion en entier SQL signé 32 bits. Un héros sans règles reçoit une réponse 422 plutôt qu’un build générique présenté comme personnalisé.
 
