@@ -2,7 +2,7 @@
 
 Un premier site en français pour explorer le catalogue de Deadlock et préparer un parcours d’achat expliqué. Next.js sert l’interface ; NestJS porte les règles métier et les imports ; PostgreSQL conserve les versions du catalogue et les builds partagés.
 
-**Ce n’est pas encore un moteur statistique ni un produit prêt pour une exploitation publique.** Les builds sont des brouillons expérimentaux non validés par des joueurs experts. Aucun taux de victoire n’est affiché ou inventé.
+**Ce n’est pas encore un moteur de builds statistiques ni un produit prêt pour une exploitation publique.** La collecte d’analytics est disponible pour l’audit, mais elle ne pondère pas encore les recommandations. Les builds sont des brouillons expérimentaux non validés par des joueurs experts. Aucun taux de victoire n’est affiché ou inventé.
 
 ## Fonctionnalités de cette version
 
@@ -15,6 +15,7 @@ Un premier site en français pour explorer le catalogue de Deadlock et préparer
 - Builds sauvegardés et partageables par URL : un nouvel import ne réécrit pas les anciens liens.
 - Signalement explicite des données absentes ou non vérifiées depuis 24 heures ; un import échoué ne détruit pas le dernier catalogue valide.
 - Builds éditoriaux versionnés dans PostgreSQL, back-office protégé et revalidation automatique après changement de catalogue.
+- Collecte manuelle des statistiques d’achats avec fenêtre, modes, rang, fortune et adversaires conservés comme filtres auditables.
 
 Les objets spéciaux de niveau 5 sont exclus. Les versions importées sont des **versions du client**, pas des dates de patch vérifiées. La fraîcheur du catalogue ne vaut pas validation des builds pour la méta actuelle.
 
@@ -75,6 +76,12 @@ Après avoir déployé cette migration sur une base qui contenait déjà le cata
 
 Cette livraison fournit une **commande manuelle**, pas encore un ordonnanceur. Une tâche planifiée exécutant `node apps/api/dist/sync.js` pourra l’appeler après compilation. Redis/BullMQ reste différé tant qu’il n’y a pas de traitement analytique ou de file de travaux à gérer.
 
+## Preuves statistiques
+
+La collecte manuelle `POST /v1/admin/analytics/item-stats` enregistre une fenêtre temporelle, le mode, le filtre de rang, la fortune, les héros adverses et le seuil minimal de matchs avec chaque run. Les lignes brutes d’achats sont conservées avec leurs compteurs et temps moyens dans `AnalyticsItemStat` ; un échec ne publie aucun agrégat partiel et chaque nouvelle tentative crée un run immuable.
+
+Les profils de référence sont gérés séparément par `ReferencePlayer`. Un nom Steam et `possible_account_ids` ne suffisent pas à prouver une identité : le statut `verified` doit rester une décision éditoriale et sa source doit être renseignée. Cette tranche ne déduit pas la position de farm 1–6, la lane ou le statut professionnel depuis les analytics ; ces dimensions restent à mesurer avant d’être utilisées par le moteur.
+
 ## Structure
 
 ```text
@@ -83,6 +90,8 @@ apps/api/src/
   editorial/        Builds versionnés, seed initial et workflow de patch
   recommendations/  Calcul des achats, contexte adverse et lecture des builds
   tactical/         Tags de menaces, profils versionnés et validation éditoriale
+  analytics/        Collecte manuelle et agrégats d’achats versionnés
+  references/       Profils de joueurs de référence et vérification éditoriale
   admin/            API protégée du back-office éditorial
   database.module.ts
 apps/api/prisma/    Schéma PostgreSQL et migrations
@@ -114,6 +123,12 @@ Le seed de départ est dans `apps/api/src/editorial/seed-data.ts`, tandis que `a
 | `POST /v1/admin/builds/:id/archive`         | Archive la révision courante                                                         |
 | `GET /v1/admin/tactical-profiles`           | Liste protégée des profils tactiques et définitions de tags                          |
 | `PATCH /v1/admin/tactical-profiles/:heroId` | Révise les tags, leur intensité, leur preuve et le statut du profil                  |
+| `GET /v1/admin/analytics/runs`              | Liste les collectes statistiques protégées                                           |
+| `GET /v1/admin/analytics/runs/:id`          | Détail et lignes d’une collecte                                                      |
+| `POST /v1/admin/analytics/item-stats`       | Collecte des achats avec fenêtre et filtres explicites                               |
+| `GET /v1/admin/reference-players`           | Liste les joueurs de référence protégés                                              |
+| `POST /v1/admin/reference-players`          | Enregistre un profil de référence en attente de vérification                         |
+| `PATCH /v1/admin/reference-players/:id`     | Met à jour un profil et son statut de vérification                                   |
 
 Les champs inconnus sont rejetés. Les IDs d’objets sont des nombres JavaScript entiers, sans conversion en entier SQL signé 32 bits. Un héros sans règles reçoit une réponse 422 plutôt qu’un build générique présenté comme personnalisé.
 
@@ -139,9 +154,10 @@ GitHub Actions utilise une base éphémère avec des fixtures explicitement synt
 
 1. Faire relire les quinze variantes par des joueurs expérimentés avant de les présenter comme des recommandations validées.
 2. Faire relire les versions marquées `stale` après chaque nouveau client et documenter les décisions éditoriales.
-3. Ajouter statistiques, échantillons et intervalles de confiance après validation de la couverture réelle de la source.
-4. Étendre le contexte aux adversaires, à l’inventaire, au budget disponible et aux règles d’emplacements ; le moteur actuel génère uniquement un parcours complet de départ.
-5. Ajouter favoris, comptes et éditeur personnel seulement après validation de ce premier parcours.
+3. Ajouter les fenêtres, échantillons et intervalles de confiance aux agrégats après validation de leur couverture réelle ; la collecte actuelle ne publie pas encore de winrate.
+4. Vérifier la disponibilité de la position de farm 1–6 et de la lane avant de les utiliser pour sélectionner une référence.
+5. Brancher les profils statistiques validés, puis les substitutions adverses, dans le moteur déterministe sans mélanger des archétypes incompatibles.
+6. Ajouter favoris, comptes et éditeur personnel seulement après validation de ce premier parcours.
 
 Avant une mise en production publique : vérifier les conditions de réutilisation des données et visuels, configurer HTTPS, sauvegardes/restauration, alertes d’import, limites de ressources et authentification de l’administration future. Le limiteur actuel est en mémoire, par processus et adresse IP (120 requêtes/minute par route). Derrière le proxy Next.js, les visiteurs partagent l’adresse du proxy : prévoir une stratégie d’identification de client fiable et un limiteur distribué avant de monter en charge. Ne pas faire confiance aux en-têtes transférés provenant de clients non fiables.
 

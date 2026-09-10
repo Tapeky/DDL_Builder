@@ -14,6 +14,9 @@ export type TacticalTagKey =
   | 'anti_control'
   | 'anti_range'
   | 'anti_regeneration';
+export type ReferencePlayerVerificationStatus = 'pending' | 'verified' | 'stale' | 'rejected';
+export type AnalyticsRunStatus = 'running' | 'succeeded' | 'failed';
+export type AnalyticsMetric = 'item-stats';
 
 export interface Hero {
   id: number;
@@ -143,4 +146,60 @@ export interface RecommendationAdaptation {
   toItem: string;
   reason: string;
   threatTags: TacticalTagKey[];
+}
+
+export interface ReferencePlayer {
+  id: string;
+  displayName: string;
+  region: string;
+  accountIds: number[];
+  heroIds: number[];
+  verificationStatus: ReferencePlayerVerificationStatus;
+  verificationSource: string;
+  verifiedAt: string | null;
+  lastSeenAt: string | null;
+  sourceUrl: string | null;
+  notes: string;
+}
+
+export interface AnalyticsFilters {
+  gameMode: 'normal' | 'street_brawl' | 'explore_n_y_c' | 'internal';
+  matchMode: string;
+  minUnixTimestamp: number;
+  maxUnixTimestamp: number | null;
+  minMatches: number;
+  minAverageBadge: number | null;
+  maxAverageBadge: number | null;
+  minNetworth: number | null;
+  maxNetworth: number | null;
+  enemyHeroIds: number[];
+  enemyHeroIdsAllMatch: boolean;
+  sameLaneFilter: boolean;
+}
+
+export interface AnalyticsItemStat {
+  itemId: number;
+  bucket: number;
+  wins: number;
+  losses: number;
+  matches: number;
+  players: number;
+  avgBuyTimeS: number;
+  avgSellTimeS: number;
+  avgBuyTimeRelative: number;
+  avgSellTimeRelative: number;
+}
+
+export interface AnalyticsRunSummary {
+  id: string;
+  snapshotId: string;
+  heroId: number;
+  metric: AnalyticsMetric;
+  status: AnalyticsRunStatus;
+  source: string;
+  filters: AnalyticsFilters;
+  rowCount: number | null;
+  errorCode: string | null;
+  startedAt: string;
+  completedAt: string | null;
 }

@@ -43,6 +43,22 @@ describe('NestJS API with isolated PostgreSQL schema', () => {
     source = jest.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = new URL(String(input));
       if (url.pathname.endsWith('client-versions')) return Response.json([currentVersion]);
+      if (url.pathname.endsWith('/analytics/item-stats')) {
+        return Response.json([
+          {
+            item_id: 3_000_000_000,
+            bucket: 0,
+            wins: 12,
+            losses: 8,
+            matches: 20,
+            players: 19,
+            avg_buy_time_s: 240,
+            avg_sell_time_s: 900,
+            avg_buy_time_relative: 18,
+            avg_sell_time_relative: 70,
+          },
+        ]);
+      }
       expect(url.searchParams.get('client_version')).toBe(String(currentVersion));
       expect(url.searchParams.get('language')).toBe('french');
       if (url.pathname.endsWith('heroes')) {
@@ -125,6 +141,44 @@ describe('NestJS API with isolated PostgreSQL schema', () => {
       .post('/v1/recommendations')
       .send({ heroId: 1, style: 'balanced', opponentHeroIds: [2, 2] })
       .expect(422);
+  });
+
+  it('collects item statistics with explicit filters and keeps reference identity manual', async () => {
+    const collected = await request(app.getHttpServer())
+      .post('/v1/admin/analytics/item-stats')
+      .set('Authorization', 'Bearer integration-admin-token')
+      .send({ heroId: 1, minUnixTimestamp: 1_786_320_000, minMatches: 20 })
+      .expect(201);
+    expect(collected.body.status).toBe('succeeded');
+    expect(collected.body.rowCount).toBe(1);
+    const detail = await request(app.getHttpServer())
+      .get(`/v1/admin/analytics/runs/${collected.body.id}`)
+      .set('Authorization', 'Bearer integration-admin-token')
+      .expect(200);
+    expect(detail.body.stats[0]).toMatchObject({ itemId: 3_000_000_000, matches: 20 });
+
+    const created = await request(app.getHttpServer())
+      .post('/v1/admin/reference-players')
+      .set('Authorization', 'Bearer integration-admin-token')
+      .send({
+        id: 'specialist-infernus-eu',
+        displayName: 'Specialist EU',
+        region: 'Europe',
+        accountIds: [12345, 67890],
+        heroIds: [1],
+        verificationStatus: 'pending',
+        verificationSource: 'À vérifier manuellement',
+      })
+      .expect(201);
+    expect(created.body.verificationStatus).toBe('pending');
+    expect(created.body.accountIds).toEqual([12345, 67890]);
+    const verified = await request(app.getHttpServer())
+      .patch('/v1/admin/reference-players/specialist-infernus-eu')
+      .set('Authorization', 'Bearer integration-admin-token')
+      .send({ verificationStatus: 'verified' })
+      .expect(200);
+    expect(verified.body.verificationStatus).toBe('verified');
+    expect(verified.body.accountIds).toEqual([12345, 67890]);
   });
 
   it('exposes only validated tactical tags to the recommendation engine', async () => {
