@@ -10,7 +10,9 @@ const commands = [
 ];
 
 for (const [command, args] of commands) {
-  const result = spawnSync(command, args, { stdio: 'inherit', shell: false });
+  const executable = process.platform === 'win32' && command === pnpm ? process.env.ComSpec : command;
+  const executableArgs = process.platform === 'win32' && command === pnpm ? ['/d', '/s', '/c', command, ...args] : args;
+  const result = spawnSync(executable, executableArgs, { stdio: 'inherit', shell: false });
 
   if (result.error) {
     console.error(`Impossible d'exécuter ${command}: ${result.error.message}`);
